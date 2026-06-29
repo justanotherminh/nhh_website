@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Chọn ghế — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="tickets-head">
+  <h1>Chọn ghế</h1>
+  <p class="muted">Bấm vào ghế còn trống để chọn. Sân khấu ở phía dưới sơ đồ.
+    Cuộn chuột để phóng to / thu nhỏ, kéo để di chuyển.</p>
+  <ul class="legend">
+    {% for t in tiers %}
+    <li><span class="swatch" style="background:{{ t.color_hex }}"></span>
+      {{ t.name }} — {{ "{:,.0f}".format(t.price_vnd).replace(",", ".") }} đ
+      <em>({{ t.available }}/{{ t.total }} trống)</em></li>
+    {% endfor %}
+    <li><span class="swatch swatch-booked"></span> Đã đặt</li>
+  </ul>
+</section>
+
+<div class="seatmap-layout">
+  <div class="seatmap-container">
+    <div id="seatmap" class="seatmap-viewport">
+      <p class="muted">Đang tải sơ đồ…</p>
+    </div>
+    <div class="zoom-controls" role="group" aria-label="Phóng to thu nhỏ">
+      <button type="button" id="zoom-in" title="Phóng to">+</button>
+      <button type="button" id="zoom-out" title="Thu nhỏ">−</button>
+      <button type="button" id="zoom-reset" title="Xem toàn cảnh">⟲</button>
+    </div>
+  </div>
+
+  <aside class="selection-box">
+    <h2>Ghế đã chọn</h2>
+    <ul id="selection" class="selection-list"></ul>
+    <p id="selection-summary" class="selection-summary">Chưa chọn ghế nào.</p>
+    <button id="continue-btn" class="btn" disabled>Tiếp tục</button>
+    <p class="muted small">Thanh toán sẽ được kết nối ở bước sau.</p>
+  </aside>
+</div>
+
+<script src="/static/js/seatmap.js" defer></script>
+{% endblock %}

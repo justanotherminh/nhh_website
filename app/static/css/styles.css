@@ -1,0 +1,138 @@
+:root {
+  --ink: #1c2230;
+  --muted: #6b7280;
+  --accent: #c0392b;
+  --bg: #faf9f7;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.6;
+}
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e5e3df;
+  background: #fff;
+}
+.brand { font-weight: 700; font-size: 1.2rem; color: var(--ink); text-decoration: none; }
+.site-header nav a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+.container.wide { max-width: 1700px; }
+.hero h1 { font-size: 2rem; margin-bottom: .25rem; }
+.lead { font-size: 1.15rem; color: var(--muted); margin-top: 0; }
+.btn {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: .65rem 1.2rem;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.muted, .lead { color: var(--muted); }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0; }
+.photo-stub {
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ece9e4;
+  color: var(--muted);
+  border-radius: 8px;
+}
+table.tiers { border-collapse: collapse; width: 100%; margin-top: .5rem; }
+table.tiers th, table.tiers td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid #e5e3df; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: .4rem; vertical-align: middle; border: 1px solid rgba(0,0,0,.2); }
+.swatch-booked { background: #ea9999; }
+.site-footer { text-align: center; color: var(--muted); padding: 2rem 1rem; font-size: .9rem; }
+
+/* ---- ticket / seat map ---- */
+.tickets-head { margin-bottom: 1rem; }
+.legend { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 1rem; font-size: .9rem; }
+.legend li { display: flex; align-items: center; }
+.legend em { color: var(--muted); margin-left: .35rem; font-style: normal; }
+
+.seatmap-layout { display: flex; gap: 1.5rem; align-items: flex-start; }
+.seatmap-container {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #e5e3df;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.seatmap-viewport { width: 100%; height: 82vh; min-height: 420px; }
+.seatmap-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;       /* we handle pan/zoom ourselves */
+  cursor: grab;
+}
+.seatmap-svg:active { cursor: grabbing; }
+
+.zoom-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.zoom-controls button {
+  width: 38px;
+  height: 38px;
+  font-size: 1.3rem;
+  line-height: 1;
+  border: 1px solid #d8d5cf;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.zoom-controls button:hover { background: #f3f1ec; }
+
+.seat { transition: stroke-width .1s; }
+.seat-num { font-size: 9px; fill: #33414f; pointer-events: none; user-select: none; }
+.seat-g:hover .seat.seat-available { stroke-width: 2.5; }
+.seat-g.selected .seat { fill: #1d3557 !important; stroke: #0d1b2a !important; }
+.seat-g.selected .seat-num { fill: #fff; }
+.seat-booked, .seat-blocked { opacity: .45; }
+
+.stage { fill: #1d3557; }
+.stage-label { fill: #fff; font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+.row-marker { fill: var(--muted); font-size: 11px; font-weight: 600; }
+.arch { fill: #ececec; stroke: #cfcfcf; }
+.arch-door { fill: #fff4d6; stroke: #e6cf8f; }
+.arch-label { fill: #8a8a8a; font-size: 8px; }
+
+.selection-box {
+  flex: 0 0 260px;
+  position: sticky;
+  top: 1rem;
+  background: #fff;
+  border: 1px solid #e5e3df;
+  border-radius: 8px;
+  padding: 1rem;
+}
+.selection-box h2 { margin-top: 0; font-size: 1.1rem; }
+.selection-list { list-style: none; padding: 0; margin: 0 0 .5rem; max-height: 40vh; overflow-y: auto; }
+.selection-list li { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; padding: .3rem 0; border-bottom: 1px dashed #eee; }
+.selection-summary { font-weight: 700; }
+.selection-box .btn { width: 100%; text-align: center; border: 0; cursor: pointer; font-size: 1rem; }
+.selection-box .btn:disabled { background: #bcae9f; cursor: not-allowed; }
+.small { font-size: .8rem; }
+.error { color: var(--accent); }
+
+@media (max-width: 760px) {
+  .seatmap-layout { flex-direction: column; }
+  .selection-box { position: static; width: 100%; flex-basis: auto; }
+}

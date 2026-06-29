@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+gunicorn
+sqlalchemy
+psycopg[binary]
+alembic
+jinja2
+python-multipart
+itsdangerous
+pydantic-settings
+payos
+qrcode[pil]
+openpyxl
+apscheduler
+httpx

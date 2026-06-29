@@ -119,18 +119,20 @@ website/
     register_webhook.py     # one-time payOS confirm-webhook call
   alembic/                  # migrations
   tests/                    # pytest: hold concurrency, webhook verify, order lifecycle
+    conftest.py             # disposable Postgres test DB + transactional rollback fixtures
+  .github/workflows/ci.yml  # Postgres service + pytest + ruff on push/PR
   Dockerfile
-  docker-compose.yml        # app (gunicorn+uvicorn), db (postgres), caddy
+  docker-compose.yml        # app (gunicorn+uvicorn), db (postgres), caddy, mailpit (dev)
   Caddyfile                 # auto-HTTPS reverse proxy -> app
   .env.example
-  requirements.txt
+  requirements.txt          # + requirements-dev.txt (pytest, ruff)
   README.md                 # setup, dev (cloudflared tunnel for webhooks), Azure deploy
 ```
 
 ## Key dependencies
 fastapi, uvicorn[standard], gunicorn, sqlalchemy, psycopg[binary], alembic, jinja2,
 python-multipart, itsdangerous, pydantic-settings, **payos**, qrcode[pil], openpyxl,
-apscheduler, httpx; dev: pytest.
+apscheduler, httpx; dev/test: pytest, ruff, Mailpit (docker, fake SMTP inbox).
 
 ## Implementation phases
 1. **Scaffold**: repo, `git init`, requirements, `config.py`, `db.py`, Docker Compose
@@ -161,15 +163,33 @@ apscheduler, httpx; dev: pytest.
 - Minimal basic-auth admin dashboard (view orders, seat occupancy, manual release).
 - Single concert/event (no multi-event support yet).
 
-## Verification
-- **Unit/integration (pytest):** two carts racing for one seat (exactly one wins);
-  hold expiry frees a seat; webhook signature verification (valid/invalid); full order
-  lifecycle pending→paid→seats booked; webhook idempotency (double-fire = one booking);
-  blocked seats are not sellable; comp order books a seat with amount 0 and issues a
-  scannable ticket.
-- **Manual (local):** `docker compose up`, run `seed_placeholder.py`, open `/tickets`,
-  hold seats in two browsers to see live status, run checkout against the **payOS sandbox**,
-  expose the webhook via a **cloudflared tunnel**, confirm order flips to paid and the
-  e-ticket email arrives.
-- **Pre-deploy:** smoke-test on the Azure VM with the real domain + Caddy HTTPS, then
-  register the production webhook URL.
+## Testing strategy (rigor: focused on the risky core)
+Built to be testable: DB session is injected, the payOS SDK sits behind `payos_client.py`,
+and email send is a swappable function. Solid tests on the three things that can lose money
+or double-sell a seat; light/smoke coverage elsewhere.
+
+**Tests run against a real disposable Postgres** (docker / CI service), **not SQLite** —
+the hold mechanism relies on Postgres's atomic conditional `UPDATE`. `conftest.py` provides
+schema setup + per-test transactional rollback; concurrency tests commit for real.
+
+- **Seat holds / concurrency:** a `ThreadPoolExecutor` fires N simultaneous `/hold` requests
+  at the same seat → exactly one wins; hold expiry frees a seat; blocked seats aren't sellable.
+- **payOS webhook (SDK mocked — never hits payOS):** payloads signed with a test checksum key
+  → valid signature books seats; **tampered signature rejected**; **double-fire = one booking**
+  (idempotent). Outbound create-link is mocked to return a fake `checkoutUrl`.
+- **Order lifecycle:** pending→paid→seats booked; cancel/expire releases holds; comp order
+  books a seat with amount 0 and issues a scannable ticket.
+- **Email:** send is monkeypatched in tests (assert called with right ticket/QR data); in dev
+  it goes to **Mailpit** to eyeball the real e-ticket.
+- **Excel import:** tiny fixture `.xlsx` → assert correct tiers/seats parsed.
+
+## CI (GitHub Actions)
+`.github/workflows/ci.yml` runs on push/PR: spins up a **Postgres service container**, runs
+**`pytest`** and **`ruff`** lint. Keeps broken hold/webhook logic from landing.
+
+## Manual / pre-deploy verification (what tests can't prove)
+- `docker compose up` (app + Postgres + Mailpit), run `seed_placeholder.py`, open `/tickets`,
+  hold seats in **two browsers** to see live status; checkout against the **payOS sandbox**
+  with a **cloudflared tunnel** exposing the webhook; confirm paid + e-ticket in Mailpit.
+- **Pre-deploy:** smoke-test on the Azure VM with the real domain + Caddy HTTPS, then register
+  the production webhook URL.

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/">{{ app_name }}</a>
+    <nav><a href="/tickets">Mua vé</a></nav>
+  </header>
+  <main class="container {% block main_class %}{% endblock %}">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <p>© 2026 {{ app_name }} — Đêm nhạc gây quỹ từ thiện</p>
+  </footer>
+</body>
+</html>
