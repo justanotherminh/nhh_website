@@ -106,6 +106,9 @@ table.tiers th, table.tiers td { text-align: left; padding: .6rem .8rem; border-
 .seat-g.selected .seat { fill: #1d3557 !important; stroke: #0d1b2a !important; }
 .seat-g.selected .seat-num { fill: #fff; }
 .seat-booked, .seat-blocked { opacity: .45; }
+.seat-g-taken { pointer-events: none; }
+.seat-g-taken .seat { opacity: .45; }
+.seat-g-busy { opacity: .6; }
 
 .stage { fill: #1d3557; }
 .stage-label { fill: #fff; font-size: 14px; font-weight: 700; letter-spacing: 2px; }

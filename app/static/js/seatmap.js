@@ -5,6 +5,22 @@
   "use strict";
   const SVGNS = "http://www.w3.org/2000/svg";
   const fmtVnd = (n) => n.toLocaleString("vi-VN") + " đ";
+  const STATUS_POLL_MS = 10000;
+
+  async function postJSON(url, body) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      let data = null;
+      try { data = await r.json(); } catch (_) {}
+      return { ok: r.ok, status: r.status, data };
+    } catch (_) {
+      return { ok: false, status: 0, data: null };
+    }
+  }
 
   const root = document.getElementById("seatmap");
   if (!root) return;
@@ -66,7 +82,8 @@
 
     // ---- seats ----
     const sz = data.seat;
-    const seatReg = new Map(); // <g> element -> {seat, rect, g, tier}  (available only)
+    const seatReg = new Map(); // <g> element -> entry  (available seats only)
+    const seatById = new Map(); // seat.id -> entry
     data.seats.forEach((s) => {
       const tier = tierById[s.tier_id];
       const g = el("g", { class: "seat-g" }, svg);
@@ -80,24 +97,85 @@
       if (s.status === "available") {
         g.style.cursor = "pointer";
         el("title", {}, g).textContent = `${s.label} — ${tier ? fmtVnd(tier.price) : ""}`;
-        seatReg.set(g, { seat: s, rect, g, tier });
+        const entry = { seat: s, rect, g, tier, taken: false, busy: false };
+        seatReg.set(g, entry);
+        seatById.set(s.id, entry);
       }
     });
 
-    function toggle(seat, rect, g, tier) {
-      if (selected.has(seat.id)) {
-        selected.delete(seat.id);
-        g.classList.remove("selected");
-      } else {
-        if (selected.size >= data.maxPerOrder) {
-          alert("Bạn chỉ có thể chọn tối đa " + data.maxPerOrder + " ghế mỗi lần.");
-          return;
+    // Mark/unmark a seat as taken by someone else (greys it out, not clickable).
+    function setTaken(entry, taken) {
+      if (entry.taken === taken) return;
+      entry.taken = taken;
+      entry.g.classList.toggle("seat-g-taken", taken);
+      entry.rect.classList.toggle("seat-booked", taken);
+      entry.g.style.cursor = taken ? "default" : "pointer";
+    }
+
+    async function toggle(entry) {
+      if (entry.busy || entry.taken) return;
+      const { seat, g, tier } = entry;
+      entry.busy = true;
+      g.classList.add("seat-g-busy");
+      try {
+        if (selected.has(seat.id)) {
+          await postJSON("/api/release", { seat_id: seat.id });
+          selected.delete(seat.id);
+          g.classList.remove("selected");
+          updatePanel();
+        } else {
+          if (selected.size >= data.maxPerOrder) {
+            alert("Bạn chỉ có thể chọn tối đa " + data.maxPerOrder + " ghế mỗi lần.");
+            return;
+          }
+          const res = await postJSON("/api/hold", { seat_id: seat.id });
+          if (!res.ok) {
+            if (res.status === 409) {
+              setTaken(entry, true);
+              alert((res.data && res.data.detail) || "Ghế này vừa được người khác chọn.");
+            } else {
+              alert("Không giữ được ghế, vui lòng thử lại.");
+            }
+            return;
+          }
+          selected.set(seat.id, { seat, tier });
+          g.classList.add("selected");
+          updatePanel();
         }
-        selected.set(seat.id, { seat, tier });
-        g.classList.add("selected");
+      } finally {
+        entry.busy = false;
+        g.classList.remove("seat-g-busy");
       }
+    }
+
+    // Reconcile the map with server truth: grey out seats others took, restore
+    // this cart's own held seats (e.g. after a reload), free seats that reopened.
+    function applyStatus(st) {
+      const takenSet = new Set(st.taken || []);
+      const yoursSet = new Set(st.yours || []);
+      seatById.forEach((entry, id) => {
+        setTaken(entry, takenSet.has(id) && !yoursSet.has(id));
+        if (yoursSet.has(id) && !selected.has(id)) {
+          selected.set(id, { seat: entry.seat, tier: entry.tier });
+          entry.g.classList.add("selected");
+        }
+        // A seat we thought we held but the server no longer credits to us.
+        if (selected.has(id) && !yoursSet.has(id)) {
+          selected.delete(id);
+          entry.g.classList.remove("selected");
+        }
+      });
       updatePanel();
     }
+
+    async function refreshStatus() {
+      try {
+        const r = await fetch("/api/seats/status");
+        if (r.ok) applyStatus(await r.json());
+      } catch (_) {}
+    }
+    refreshStatus();
+    setInterval(refreshStatus, STATUS_POLL_MS);
 
     // ===== zoom / pan via viewBox =====
     const vb = { x: content.x, y: content.y, w: content.w, h: content.h };
@@ -193,7 +271,7 @@
       if (pointers.size < 2) lastDist = 0;
       if (wasSingle && !dragged && downSeat) {
         const entry = seatReg.get(downSeat);
-        if (entry) toggle(entry.seat, entry.rect, entry.g, entry.tier);
+        if (entry) toggle(entry);
       }
       downSeat = null;
     });
