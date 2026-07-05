@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Đơn hàng {{ order.order_code }} — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="checkout-result" data-order="{{ order.order_code }}">
+  {% if order.status == "paid" %}
+  <h1>🎉 Thanh toán thành công!</h1>
+  <p>Cảm ơn bạn đã ủng hộ đêm nhạc gây quỹ. Vé điện tử sẽ được gửi tới
+     <strong>{{ order.email }}</strong>.</p>
+  {% else %}
+  <h1>Đang xác nhận thanh toán…</h1>
+  <p class="muted">Chúng tôi đang chờ xác nhận từ cổng thanh toán. Trang này sẽ
+     tự động cập nhật khi thanh toán hoàn tất.</p>
+  <p id="pay-status" class="muted small">Trạng thái: {{ order.status }}</p>
+  {% endif %}
+
+  <p><strong>Mã đơn hàng:</strong> {{ order.order_code }}</p>
+  <p><strong>Số tiền:</strong> {{ "{:,.0f}".format(order.amount_vnd).replace(",", ".") }} đ</p>
+  <p><a class="btn" href="/">Về trang chủ</a></p>
+</section>
+
+{% if order.status != "paid" %}
+<script>
+  // Poll the order status until it flips to paid (the webhook is the source of
+  // truth, so we don't trust the redirect alone).
+  const orderCode = document.querySelector(".checkout-result").dataset.order;
+  const timer = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/order/${orderCode}/status`);
+      if (!r.ok) return;
+      const { status } = await r.json();
+      const el = document.getElementById("pay-status");
+      if (el) el.textContent = "Trạng thái: " + status;
+      if (status === "paid") { clearInterval(timer); location.reload(); }
+    } catch (_) {}
+  }, 3000);
+</script>
+{% endif %}
+{% endblock %}

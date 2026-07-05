@@ -291,6 +291,11 @@
     document.getElementById("zoom-out")?.addEventListener("click", () => { const c = center(); zoomAt(c.cx, c.cy, 1 / 1.4); });
     document.getElementById("zoom-reset")?.addEventListener("click", fit);
 
+    // "Tiếp tục" -> checkout (seats are already held server-side for this cart).
+    continueBtn?.addEventListener("click", () => {
+      if (!continueBtn.disabled) window.location.href = "/checkout";
+    });
+
     window.addEventListener("resize", fit);
     // initial fit (rAF so the element has been laid out)
     requestAnimationFrame(fit);

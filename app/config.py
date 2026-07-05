@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     payos_client_id: str = ""
     payos_api_key: str = ""
     payos_checksum_key: str = ""
+    # When True (or when payOS is unconfigured), checkout uses the in-app dev-pay
+    # simulator instead of a real payment link. Keep False in production.
+    payments_dev_mode: bool = False
 
     # SMTP (defaults point at the Mailpit container from docker-compose)
     smtp_host: str = "localhost"
@@ -29,7 +32,7 @@ class Settings(BaseSettings):
 
     # Seat holds (seconds)
     hold_ttl_seconds: int = 600  # 10 min while browsing
-    payment_window_seconds: int = 900  # 15 min once a payОС link is created
+    payment_window_seconds: int = 900  # 15 min once a payOS link is created
     max_seats_per_order: int = 8
 
     # Admin (HTTP basic auth)

@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db import engine
-from app.routers import pages, seatmap, seats
+from app.routers import checkout, pages, seatmap, seats, webhook
 
 app = FastAPI(title=settings.app_name)
 
@@ -20,6 +20,8 @@ app.mount(
 app.include_router(pages.router)
 app.include_router(seatmap.router)
 app.include_router(seats.router)
+app.include_router(checkout.router)
+app.include_router(webhook.router)
 
 
 @app.get("/health")

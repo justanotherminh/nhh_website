@@ -138,4 +138,27 @@ table.tiers th, table.tiers td { text-align: left; padding: .6rem .8rem; border-
 @media (max-width: 760px) {
   .seatmap-layout { flex-direction: column; }
   .selection-box { position: static; width: 100%; flex-basis: auto; }
+  .checkout-layout { flex-direction: column; }
 }
+
+/* ---- checkout ---- */
+.checkout-layout { display: flex; gap: 2rem; align-items: flex-start; margin-top: 1rem; }
+.checkout-summary { flex: 1 1 340px; }
+.checkout-form { flex: 1 1 320px; background: #fff; border: 1px solid #e5e3df; border-radius: 8px; padding: 1.5rem; }
+.checkout-form h2 { margin-top: 0; }
+.checkout-form label { display: block; margin-bottom: 1rem; font-weight: 600; font-size: .9rem; }
+.checkout-form input {
+  display: block; width: 100%; margin-top: .35rem; padding: .6rem .7rem;
+  border: 1px solid #d8d5cf; border-radius: 6px; font-size: 1rem; font-family: inherit;
+}
+.checkout-form .btn { width: 100%; text-align: center; border: 0; cursor: pointer; }
+.order-seats { list-style: none; padding: 0; margin: 0 0 1rem; }
+.order-seats li { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-bottom: 1px dashed #e5e3df; }
+.order-total { display: flex; justify-content: space-between; gap: 1rem; font-size: 1.1rem; padding-top: .5rem; }
+.checkout-result { max-width: 560px; }
+.checkout-result h1 { margin-bottom: .5rem; }
+.dev-banner { background: #fff4d6; border: 1px solid #e6cf8f; border-radius: 6px; padding: .6rem .9rem; font-size: .85rem; margin-bottom: 1rem; }
+.dev-actions { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
+.dev-actions form { margin: 0; }
+.dev-actions .btn { cursor: pointer; border: 0; }
+.btn-secondary { background: #6b7280; }

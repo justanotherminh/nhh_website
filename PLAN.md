@@ -74,7 +74,7 @@ Two separate concepts, both admin-driven (no guest-facing self-selection):
   pull them from public sale (hidden/greyed on the public map). Reversible (unblock).
 - **Issuing a comp ticket**: admin picks seat(s) (typically blocked ones) + enters a guest
   name/email and sends. This creates an `order` with `kind='comp'`, `amount_vnd=0`, **no
-  payОС step**, status straight to `paid`/confirmed, seats flipped to `booked`. It reuses
+  payOS step**, status straight to `paid`/confirmed, seats flipped to `booked`. It reuses
   the **same ticket/QR/email machinery** as paid orders, so comp and paid tickets **scan
   identically at the door** and reports can split sold vs. comp counts.
 

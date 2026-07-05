@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Thanh toán — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="checkout">
+  <h1>Xác nhận &amp; thanh toán</h1>
+
+  <div class="checkout-layout">
+    <div class="checkout-summary">
+      <h2>Ghế đã chọn</h2>
+      <ul class="order-seats">
+        {% for s in seats %}
+        <li>
+          <span>{{ s.label }}</span>
+          <span>{{ "{:,.0f}".format(s.tier.price_vnd).replace(",", ".") }} đ</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="order-total">
+        <strong>Tổng cộng ({{ seats|length }} ghế):</strong>
+        <strong>{{ "{:,.0f}".format(total).replace(",", ".") }} đ</strong>
+      </p>
+      <p class="muted small">Ghế của bạn được giữ tạm thời. Vui lòng hoàn tất
+        thanh toán trong thời gian quy định, nếu không ghế sẽ được mở lại.</p>
+    </div>
+
+    <form class="checkout-form" method="post" action="/checkout">
+      <h2>Thông tin người mua</h2>
+      <label>Họ và tên
+        <input type="text" name="buyer_name" required autocomplete="name">
+      </label>
+      <label>Email (nhận vé điện tử)
+        <input type="email" name="email" required autocomplete="email">
+      </label>
+      <label>Số điện thoại
+        <input type="tel" name="phone" required autocomplete="tel">
+      </label>
+      <button type="submit" class="btn">Tiến hành thanh toán →</button>
+      <p><a href="/tickets" class="muted small">← Quay lại chọn ghế</a></p>
+    </form>
+  </div>
+</section>
+{% endblock %}
