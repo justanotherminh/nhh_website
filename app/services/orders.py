@@ -4,6 +4,7 @@ payOS webhook may fire more than once.
 """
 from __future__ import annotations
 
+import logging
 import secrets
 import time
 import uuid
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import Order, OrderItem, Seat, Ticket
 from app.services import holds
+
+log = logging.getLogger("orders")
 
 
 class NoSeatsHeld(Exception):
@@ -111,6 +114,16 @@ def mark_order_paid(db: Session, order_code: int) -> bool:
             )
         )
     db.commit()
+
+    # Deliver e-tickets. Email failure must NOT undo the confirmed payment, so we
+    # log and move on — the buyer can still view tickets via the success page.
+    try:
+        from app.services import tickets as ticket_svc
+
+        ticket_svc.send_ticket_email(db, order_code)
+    except Exception:
+        log.exception("Failed to email e-tickets for order %s", order_code)
+
     return True
 
 

@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "NHH 2026 <noreply@nhh.local>"
+    smtp_use_tls: bool = False  # True for real SMTP (e.g. Gmail); False for Mailpit
 
     # Seat holds (seconds)
     hold_ttl_seconds: int = 600  # 10 min while browsing
