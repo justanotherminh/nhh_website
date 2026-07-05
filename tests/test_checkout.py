@@ -12,11 +12,17 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
+from app.config import settings
 from app.db import SessionLocal
 from app.main import app
 from app.models import Order, OrderItem, PriceTier, Seat, Ticket
 from app.routers import checkout as checkout_router
 from app.services import orders, payos_client
+
+# The exact HMAC helper the SDK's own verify path uses, so a signature we build
+# here is byte-for-byte what payOS would send. If the SDK relocates it, these
+# tests fail loudly (which is the point).
+from payos.utils._compat import _create_signature_from_obj
 
 
 @pytest.fixture()
@@ -169,5 +175,105 @@ def test_webhook_rejects_bad_signature(throwaway_seats, monkeypatch):
     db = SessionLocal()
     try:
         assert orders.get_order(db, order_code).status == "pending"  # unchanged
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Higher-fidelity webhook tests: verify_webhook is NOT mocked. We build a body
+# with a *real* payOS-format HMAC signature (using a test checksum key) and let
+# the genuine signature-verification code path run end to end. No network, no
+# money — but it exercises the exact crypto that protects booking in production.
+# ---------------------------------------------------------------------------
+
+TEST_CHECKSUM = "test-checksum-key-abc123"
+
+
+def _signed_webhook_body(order_code: int, amount: int, code: str = "00") -> dict:
+    """A webhook payload signed exactly the way payOS signs it."""
+    data = {
+        "orderCode": order_code,
+        "amount": amount,
+        "description": "NHH thanh toan",
+        "accountNumber": "0004175xxx",
+        "reference": "FT2026",
+        "transactionDateTime": "2026-07-05 12:00:00",
+        "paymentLinkId": "link-abc-123",
+        "code": code,
+        "desc": "success",
+        "counterAccountBankId": None,
+        "counterAccountBankName": None,
+        "counterAccountName": None,
+        "counterAccountNumber": None,
+        "virtualAccountName": None,
+        "virtualAccountNumber": None,
+        "currency": "VND",
+    }
+    signature = _create_signature_from_obj(data, TEST_CHECKSUM)
+    return {"code": code, "desc": "success", "success": True,
+            "data": data, "signature": signature}
+
+
+@pytest.fixture()
+def test_checksum(monkeypatch):
+    """Point the app's payOS config at a known test checksum key so we can both
+    sign and (via the real verify path) verify with it."""
+    monkeypatch.setattr(settings, "payos_client_id", "test-client")
+    monkeypatch.setattr(settings, "payos_api_key", "test-api-key")
+    monkeypatch.setattr(settings, "payos_checksum_key", TEST_CHECKSUM)
+
+
+def _make_pending_order(seat_ids):
+    from app.services import holds
+    cart = uuid.uuid4()
+    db = SessionLocal()
+    amount = 0
+    for sid in seat_ids:
+        assert holds.acquire(db, sid, cart, 600)
+    order = orders.create_order_from_holds(
+        db, cart_id=cart, buyer_name="D", email="d@x.com", phone="0900000003",
+        extend_seconds=900,
+    )
+    code, amount = order.order_code, order.amount_vnd
+    db.close()
+    return code, amount
+
+
+def test_webhook_real_signature_books_order(throwaway_seats, test_checksum):
+    order_code, amount = _make_pending_order(throwaway_seats)
+
+    body = _signed_webhook_body(order_code, amount)
+    c = TestClient(app)
+    # verify_webhook runs for real here — the signature must actually check out.
+    assert c.post("/payos/webhook", json=body).json() == {"success": True}
+
+    db = SessionLocal()
+    try:
+        assert orders.get_order(db, order_code).status == "paid"
+        booked = db.execute(
+            select(Seat.status).where(Seat.id.in_(throwaway_seats))
+        ).scalars().all()
+        assert booked == ["booked"] * len(throwaway_seats)
+    finally:
+        db.close()
+
+
+def test_webhook_tampered_signature_is_rejected(throwaway_seats, test_checksum):
+    order_code, amount = _make_pending_order(throwaway_seats)
+
+    body = _signed_webhook_body(order_code, amount)
+    body["signature"] = body["signature"][:-1] + ("0" if body["signature"][-1] != "0" else "1")
+
+    c = TestClient(app)
+    assert c.post("/payos/webhook", json=body).json() == {"success": False}
+
+    db = SessionLocal()
+    try:
+        # Tampered payload must NOT book anything.
+        assert orders.get_order(db, order_code).status == "pending"
+        booked = db.execute(
+            select(Seat.status).where(Seat.id.in_(throwaway_seats))
+        ).scalars().all()
+        assert booked == ["available"] * len(throwaway_seats)
     finally:
         db.close()
