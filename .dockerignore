@@ -1,0 +1,12 @@
+.venv/
+.git/
+.github/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.prod.example
+.pytest_cache/
+node_modules/
+*.md
+scratchpad/

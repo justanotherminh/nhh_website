@@ -1,0 +1,15 @@
+# Auto-HTTPS reverse proxy. Requires nanghoanghon.org and www.nanghoanghon.org
+# to resolve directly to this server (Cloudflare "DNS only" / grey cloud), so
+# Caddy can complete the Let's Encrypt HTTP-01 challenge on port 80.
+{
+	email admin@nanghoanghon.org
+}
+
+www.nanghoanghon.org {
+	reverse_proxy app:8000
+}
+
+# Send the bare apex to the canonical www host.
+nanghoanghon.org {
+	redir https://www.nanghoanghon.org{uri} permanent
+}

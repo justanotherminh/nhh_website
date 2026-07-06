@@ -11,6 +11,8 @@ Run:  .venv/bin/python -m scripts.import_seatmap
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import openpyxl
 from openpyxl.utils import column_index_from_string as col_idx
 from sqlalchemy import delete
@@ -18,8 +20,21 @@ from sqlalchemy import delete
 from app.db import SessionLocal
 from app.models import OrderItem, PriceTier, Seat, Ticket
 
-XLSX = "[NHH 2026] Sơ đồ phòng hòa nhạc lớn.xlsx"
+REPO_ROOT = Path(__file__).resolve().parent.parent
 SHEET = "Sơ đồ"
+
+
+def _find_xlsx() -> Path:
+    """Locate the seat-map workbook in the repo root by glob.
+
+    The filename contains Vietnamese characters; matching it as a literal string
+    breaks across filesystems that normalize Unicode differently (macOS vs Linux
+    containers). Globbing sidesteps that, and is independent of the working dir.
+    """
+    matches = sorted(REPO_ROOT.glob("*.xlsx"))
+    if not matches:
+        raise FileNotFoundError(f"No .xlsx seat map found in {REPO_ROOT}")
+    return matches[0]
 
 # Fill color (ARGB) -> tier definition (name, hex shown in UI, price in VND).
 TIERS = {
@@ -64,7 +79,7 @@ def classify(col: int, row: int, row_letters: dict[int, str]) -> tuple[str, str]
 
 
 def run() -> None:
-    wb = openpyxl.load_workbook(XLSX, data_only=True)
+    wb = openpyxl.load_workbook(_find_xlsx(), data_only=True)
     ws = wb[SHEET]
 
     # Row letter for each spreadsheet row, read from the center label column (AF).
