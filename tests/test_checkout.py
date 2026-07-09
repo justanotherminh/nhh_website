@@ -5,12 +5,13 @@ and cleaned up per test, and payOS is stubbed so nothing touches the network.
 """
 from __future__ import annotations
 
+import datetime as dt
 import types
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, update
 
 from app.config import settings
 from app.db import SessionLocal
@@ -275,5 +276,55 @@ def test_webhook_tampered_signature_is_rejected(throwaway_seats, test_checksum):
             select(Seat.status).where(Seat.id.in_(throwaway_seats))
         ).scalars().all()
         assert booked == ["available"] * len(throwaway_seats)
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Stale-order expiry: buyers who open the payOS page and abandon it (no cancel,
+# no webhook) must have their pending order auto-cancelled and seats freed.
+# ---------------------------------------------------------------------------
+
+
+def _backdate_order(order_code: int, seconds_ago: int) -> None:
+    db = SessionLocal()
+    db.execute(
+        update(Order)
+        .where(Order.order_code == order_code)
+        .values(created_at=func.now() - dt.timedelta(seconds=seconds_ago))
+    )
+    db.commit()
+    db.close()
+
+
+def test_expire_cancels_stale_pending_order_and_releases_seats(throwaway_seats, monkeypatch):
+    # Never touch the network for the payOS link void.
+    monkeypatch.setattr(orders, "payos_client_configured", lambda: False)
+
+    order_code, _ = _make_pending_order(throwaway_seats)
+    # Pretend it was created well beyond the payment window.
+    _backdate_order(order_code, settings.payment_window_seconds + 60)
+
+    db = SessionLocal()
+    try:
+        assert orders.expire_stale_orders(db) >= 1
+        assert orders.get_order(db, order_code).status == "cancelled"
+        seats = db.execute(
+            select(Seat.status, Seat.held_by_cart).where(Seat.id.in_(throwaway_seats))
+        ).all()
+        assert all(status == "available" and held is None for status, held in seats)
+    finally:
+        db.close()
+
+
+def test_expire_leaves_fresh_pending_order_untouched(throwaway_seats, monkeypatch):
+    monkeypatch.setattr(orders, "payos_client_configured", lambda: False)
+
+    order_code, _ = _make_pending_order(throwaway_seats)  # created just now
+
+    db = SessionLocal()
+    try:
+        orders.expire_stale_orders(db)
+        assert orders.get_order(db, order_code).status == "pending"  # within window
     finally:
         db.close()

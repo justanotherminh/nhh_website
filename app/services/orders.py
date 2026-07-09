@@ -4,14 +4,16 @@ payOS webhook may fire more than once.
 """
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import secrets
 import time
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import settings
 from app.models import Order, OrderItem, Seat, Ticket
 from app.services import holds
 
@@ -142,3 +144,61 @@ def cancel_order(db: Session, order_code: int, reason: str = "") -> bool:
     )
     db.commit()
     return True
+
+
+def expire_stale_orders(db: Session, older_than_seconds: int | None = None) -> int:
+    """Cancel pending orders whose payment window has elapsed with no payment.
+
+    Catches buyers who reach the payOS page and just close it (no explicit cancel,
+    no webhook). Their held seats have already lapsed lazily; this tidies the order
+    row to 'cancelled' and voids the payOS link so it can't be paid late.
+
+    Race-safe across workers: the single ``UPDATE ... WHERE status='pending'
+    RETURNING`` atomically claims each stale order, so if several schedulers run at
+    once, each order is cancelled exactly once (only one worker gets it back).
+    """
+    window = settings.payment_window_seconds if older_than_seconds is None else older_than_seconds
+    cutoff = func.now() - dt.timedelta(seconds=window)
+
+    claimed = db.execute(
+        update(Order)
+        .where(Order.status == "pending", Order.created_at < cutoff)
+        .values(status="cancelled")
+        .returning(Order.id, Order.order_code, Order.payos_payment_link_id)
+    ).all()
+    db.commit()
+
+    if not claimed:
+        return 0
+
+    # Free any seats these orders were still holding (never touch booked seats).
+    order_ids = [row.id for row in claimed]
+    seat_ids = select(OrderItem.seat_id).where(OrderItem.order_id.in_(order_ids))
+    db.execute(
+        update(Seat)
+        .where(Seat.status == "available", Seat.id.in_(seat_ids))
+        .values(held_by_cart=None, hold_expires_at=None)
+    )
+    db.commit()
+
+    # Best effort: void the payOS link so a late payment can't book a freed seat.
+    if payos_client_configured():
+        from app.services import payos_client
+
+        for row in claimed:
+            if not row.payos_payment_link_id:
+                continue
+            try:
+                payos_client.cancel_payment_link(row.order_code, "Hết hạn thanh toán")
+            except Exception:
+                log.warning("Could not void payOS link for order %s", row.order_code)
+
+    log.info("Expired %d stale pending order(s)", len(claimed))
+    return len(claimed)
+
+
+def payos_client_configured() -> bool:
+    """True only when a real payOS link exists to void (skips dev/sandbox-off)."""
+    from app.services import payos_client
+
+    return payos_client.is_configured() and not settings.payments_dev_mode

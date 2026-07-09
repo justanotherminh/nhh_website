@@ -176,3 +176,23 @@ table.tiers th, table.tiers td { text-align: left; padding: .6rem .8rem; border-
 .ticket-info dd { margin: 0; font-weight: 600; }
 .ticket-qr { flex: 0 0 auto; text-align: center; }
 .ticket-qr img { border: 1px solid #e5e3df; border-radius: 8px; }
+
+/* ---- admin dashboard ---- */
+.admin-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.inline { display: inline; margin: 0; }
+.small-btn { margin-top: 0; padding: .4rem .8rem; font-size: .85rem; }
+.admin-cards { display: flex; flex-wrap: wrap; gap: 1rem; margin: 1.2rem 0 2rem; }
+.card { flex: 1 1 140px; background: #fff; border: 1px solid #e5e3df; border-radius: 10px; padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: .3rem; }
+.card-num { font-size: 1.6rem; font-weight: 700; }
+.card-label { font-size: .85rem; color: var(--muted); }
+.card-accent { background: #1d3557; }
+.card-accent .card-num, .card-accent .card-label { color: #fff; }
+.admin-table { border-collapse: collapse; width: 100%; margin: .5rem 0 2rem; font-size: .9rem; }
+.admin-table th, .admin-table td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid #eee; vertical-align: top; }
+.admin-table th { color: var(--muted); font-weight: 600; }
+.status { padding: .15rem .5rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+.status-paid { background: #d7f0dd; color: #1c6b34; }
+.status-pending { background: #fdf0d0; color: #8a6100; }
+.status-cancelled { background: #eee; color: #888; }
+.status-expired { background: #eee; color: #888; }
+.link-btn { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }

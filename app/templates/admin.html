@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Quản trị — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Bảng quản trị</h1>
+    <form method="post" action="/admin/sweep" class="inline">
+      <button type="submit" class="btn btn-secondary small-btn">Dọn đơn hết hạn</button>
+    </form>
+  </div>
+
+  <div class="admin-cards">
+    <div class="card"><span class="card-num">{{ booked }}</span><span class="card-label">Ghế đã bán</span></div>
+    <div class="card"><span class="card-num">{{ held }}</span><span class="card-label">Đang giữ</span></div>
+    <div class="card"><span class="card-num">{{ free_now }}</span><span class="card-label">Còn trống</span></div>
+    <div class="card"><span class="card-num">{{ total_seats }}</span><span class="card-label">Tổng số ghế</span></div>
+    <div class="card card-accent">
+      <span class="card-num">{{ "{:,.0f}".format(revenue_paid).replace(",", ".") }} đ</span>
+      <span class="card-label">Doanh thu (đã thanh toán)</span>
+    </div>
+  </div>
+
+  <h2>Theo hạng vé</h2>
+  <table class="admin-table">
+    <thead><tr><th>Hạng</th><th>Giá</th><th>Còn trống</th><th>Tổng</th></tr></thead>
+    <tbody>
+      {% for t in tiers %}
+      <tr>
+        <td><span class="swatch" style="background:{{ t.color }}"></span>{{ t.name }}</td>
+        <td>{{ "{:,.0f}".format(t.price).replace(",", ".") }} đ</td>
+        <td>{{ t.available }}</td>
+        <td>{{ t.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Đơn hàng gần đây</h2>
+  <table class="admin-table">
+    <thead>
+      <tr><th>Mã đơn</th><th>Người mua</th><th>Liên hệ</th><th>Ghế</th><th>Số tiền</th><th>Trạng thái</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td>{{ o.order_code }}</td>
+        <td>{{ o.buyer_name }}</td>
+        <td class="small">{{ o.email }}<br>{{ o.phone }}</td>
+        <td>{{ o.items|length }}</td>
+        <td>{{ "{:,.0f}".format(o.amount_vnd).replace(",", ".") }} đ</td>
+        <td><span class="status status-{{ o.status }}">{{ o.status }}</span></td>
+        <td>
+          {% if o.status == "pending" %}
+          <form method="post" action="/admin/orders/{{ o.order_code }}/cancel" class="inline"
+                onsubmit="return confirm('Hủy đơn {{ o.order_code }}?');">
+            <button type="submit" class="link-btn">Hủy</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">Chưa có đơn hàng nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
