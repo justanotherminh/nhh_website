@@ -10,7 +10,9 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db import SessionLocal, engine
-from app.routers import admin, checkout, pages, seatmap, seats, ticket_view, webhook
+from app.routers import (
+    admin, checkin, checkout, pages, seatmap, seats, ticket_view, webhook,
+)
 from app.services import orders
 
 log = logging.getLogger("scheduler")
@@ -61,6 +63,7 @@ app.include_router(checkout.router)
 app.include_router(webhook.router)
 app.include_router(ticket_view.router)
 app.include_router(admin.router)
+app.include_router(checkin.router)
 
 
 @app.get("/health")

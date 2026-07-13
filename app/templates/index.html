@@ -1,19 +1,29 @@
 {% extends "base.html" %}
+{% block body_class %}home{% endblock %}
+{% block main_class %}home-main{% endblock %}
 {% block content %}
-<section class="hero">
-  <h1>{{ app_name }}</h1>
-  <p class="lead">Đêm nhạc gây quỹ từ thiện — Hà Nội</p>
-  <p>Thông tin chương trình và hình ảnh các đêm nhạc trước sẽ được cập nhật tại đây.</p>
-  <p><a class="btn" href="/tickets">Chọn ghế &amp; mua vé →</a></p>
-</section>
+<section class="home-hero">
+  <div class="home-hero__overlay" aria-hidden="true"></div>
 
-<section class="gallery-placeholder">
-  <h2>Hình ảnh các đêm nhạc trước</h2>
-  <div class="photo-grid">
-    <div class="photo-stub">Ảnh 1</div>
-    <div class="photo-stub">Ảnh 2</div>
-    <div class="photo-stub">Ảnh 3</div>
+  <div class="home-hero__inner">
+    <div class="home-hero__copy">
+      <img class="home-hero__title" src="/static/img/song-troi.png"
+           alt="Sông Trời" width="1400" height="1214">
+      <p class="home-hero__sub">Đêm nhạc gây quỹ từ thiện — Hà Nội, 2026</p>
+      <a class="home-hero__cta" href="/tickets">Đặt vé</a>
+    </div>
+
+    {# Featured-moment carousel. Images auto-discovered from static/img/moments/;
+       placeholder tiles show until the designer's photos are dropped in. #}
+    <div class="home-hero__featured" aria-hidden="true">
+      <div class="moments">
+        {% for src in moments %}
+        <div class="moment"><img src="{{ src }}" alt="" loading="lazy"></div>
+        {% endfor %}
+      </div>
+    </div>
   </div>
-  <p class="muted">(Trang chủ sẽ được nhóm thiết kế hoàn thiện sau.)</p>
+
+  <script src="/static/js/moments.js" defer></script>
 </section>
 {% endblock %}

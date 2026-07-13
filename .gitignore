@@ -32,3 +32,12 @@ env/
 *.db
 caddy_data/
 postgres_data/
+
+# Design source assets (large working files at repo root; the optimized
+# derivatives the site actually serves live under app/static/img/ and ARE tracked)
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
+/*.psd
+/*.ai

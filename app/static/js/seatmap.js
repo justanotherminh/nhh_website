@@ -36,10 +36,6 @@
     if (parent) parent.appendChild(e);
     return e;
   }
-  function darken(hex, f = 0.55) {
-    const n = parseInt(hex.slice(1), 16);
-    return `rgb(${Math.round(((n >> 16) & 255) * f)},${Math.round(((n >> 8) & 255) * f)},${Math.round((n & 255) * f)})`;
-  }
 
   fetch("/api/seatmap")
     .then((r) => r.json())
@@ -86,12 +82,12 @@
     const seatById = new Map(); // seat.id -> entry
     data.seats.forEach((s) => {
       const tier = tierById[s.tier_id];
-      const g = el("g", { class: "seat-g" }, svg);
+      // Colour comes from the tier's price rank via CSS (.seat-g.tier-r*), not JS.
+      const rank = tier ? tier.rank : 0;
+      const g = el("g", { class: "seat-g tier-r" + rank }, svg);
       const rect = el("rect", {
         x: s.x, y: s.y, width: sz, height: sz, rx: 3,
         class: "seat seat-" + s.status,
-        fill: tier ? tier.color : "#ccc",
-        stroke: tier ? darken(tier.color) : "#999",
       }, g);
       el("text", { x: s.x + sz / 2, y: s.y + sz / 2, class: "seat-num", "text-anchor": "middle", "dominant-baseline": "central" }, g).textContent = s.num;
       if (s.status === "available") {

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Vé mời — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Vé mời</h1>
+    <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+  </div>
+
+  {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
+  {% if error %}<p class="flash flash-err">{{ error }}</p>{% endif %}
+
+  <h2>Phát vé mời</h2>
+  {% if pool %}
+  <p class="muted small">Chọn ghế trong danh sách giữ chỗ bên dưới, nhập thông tin khách mời rồi bấm “Phát vé mời”. Vé QR sẽ được gửi qua email.</p>
+  <form method="post" action="/admin/invitations" id="issueForm" class="invite-form"
+        onsubmit="return this.querySelectorAll('input[name=seat_ids]:checked').length > 0 || (alert('Chọn ít nhất một ghế.'), false);">
+    <div class="invite-fields">
+      <label>Tên khách mời<input type="text" name="guest_name" required></label>
+      <label>Email<input type="email" name="email" required></label>
+      <label>Điện thoại (tuỳ chọn)<input type="text" name="phone"></label>
+      <button type="submit" class="btn">Phát vé mời</button>
+    </div>
+  </form>
+
+  <table class="admin-table">
+    <thead><tr><th></th><th>Ghế</th><th>Khu vực</th><th>Hạng</th><th></th></tr></thead>
+    <tbody>
+      {% for s in pool %}
+      <tr>
+        <td><input type="checkbox" name="seat_ids" value="{{ s.id }}" form="issueForm"></td>
+        <td>{{ s.label }}</td>
+        <td>{{ s.section }}</td>
+        <td><span class="swatch swatch--r{{ rank_map[s.tier.price_vnd] }}"></span>{{ s.tier.name }}</td>
+        <td>
+          <form method="post" action="/admin/invitations/unblock/{{ s.id }}" class="inline"
+                onsubmit="return confirm('Trả ghế {{ s.label }} về bán công khai?');">
+            <button type="submit" class="link-btn">Bỏ giữ</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Chưa có ghế nào được giữ cho vé mời. Thêm ghế vào danh sách bên dưới trước khi phát vé.</p>
+  {% endif %}
+
+  <h2>Giữ thêm ghế cho vé mời</h2>
+  <p class="muted small">Mỗi dòng một ghế: nhập mã ghế (id) hoặc nhãn ghế đầy đủ. Chỉ những ghế đang trống mới được giữ.</p>
+  <form method="post" action="/admin/invitations/block" class="invite-form">
+    <textarea name="identifiers" rows="4" placeholder="123&#10;Tầng 1 – Hàng A – Ghế 5" class="invite-textarea"></textarea>
+    <button type="submit" class="btn btn-secondary">Giữ ghế</button>
+  </form>
+
+  <h2>Vé mời đã phát</h2>
+  <table class="admin-table">
+    <thead><tr><th>Mã đơn</th><th>Khách mời</th><th>Liên hệ</th><th>Ghế</th></tr></thead>
+    <tbody>
+      {% for o in comps %}
+      <tr>
+        <td>{{ o.order_code }}</td>
+        <td>{{ o.buyer_name }}</td>
+        <td class="small">{{ o.email }}{% if o.phone %}<br>{{ o.phone }}{% endif %}</td>
+        <td>{{ o.items|length }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">Chưa phát vé mời nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

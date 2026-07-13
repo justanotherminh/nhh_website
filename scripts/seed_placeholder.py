@@ -14,11 +14,12 @@ from sqlalchemy import delete
 from app.db import SessionLocal
 from app.models import OrderItem, PriceTier, Seat, Ticket
 
-# (name, color_hex, price_vnd, row_range)  — rows nearer the stage are pricier.
+# (name, price_vnd, row_range)  — rows nearer the stage are pricier. Colour is not
+# stored; the front-end palette colours tiers by price rank.
 TIERS = [
-    ("Loại 1", "#c0392b", 700_000, "ABCDE"),
-    ("Loại 2", "#2980b9", 500_000, "FGHIJ"),
-    ("Loại 3", "#27ae60", 300_000, "KLMNO"),
+    ("Loại 1", 700_000, "ABCDE"),
+    ("Loại 2", 500_000, "FGHIJ"),
+    ("Loại 3", 300_000, "KLMNO"),
 ]
 
 SEATS_PER_ROW = 20
@@ -40,8 +41,8 @@ def seed() -> None:
         db.flush()
 
         row_to_tier: dict[str, PriceTier] = {}
-        for name, color, price, rows in TIERS:
-            tier = PriceTier(name=name, color_hex=color, price_vnd=price)
+        for name, price, rows in TIERS:
+            tier = PriceTier(name=name, price_vnd=price)
             db.add(tier)
             db.flush()  # assign id
             for r in rows:

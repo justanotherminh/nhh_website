@@ -40,5 +40,10 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "change-me"
 
+    # Door check-in (HTTP basic auth) — a limited credential for entrance volunteers.
+    # Lets them scan/redeem tickets WITHOUT admin access to buyer data.
+    checkin_username: str = "cua"
+    checkin_password: str = "change-me"
+
 
 settings = Settings()

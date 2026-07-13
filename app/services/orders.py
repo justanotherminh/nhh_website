@@ -24,6 +24,10 @@ class NoSeatsHeld(Exception):
     """The cart has no live holds, so there's nothing to check out."""
 
 
+class SeatsNotBookable(Exception):
+    """One or more requested seats can't be booked (already sold, or unknown)."""
+
+
 def _unique_order_code(db: Session) -> int:
     """A unique numeric code for payOS (ms-since-epoch + a little randomness)."""
     for _ in range(10):
@@ -74,6 +78,76 @@ def create_order_from_holds(
     db.add(order)
     db.commit()
     db.refresh(order)
+    return order
+
+
+def create_comp_order(
+    db: Session,
+    *,
+    seat_ids: list[int],
+    guest_name: str,
+    email: str,
+    phone: str = "",
+) -> Order:
+    """Issue a free invitation (``comp``) order for the given seats.
+
+    Unlike a sale, there's no cart, no payment and no pending state: the seats are
+    booked immediately, the same QR ``Ticket`` rows a buyer gets are minted, and the
+    e-ticket is emailed. All-or-nothing — if any seat isn't bookable (already sold,
+    or unknown), nothing changes and ``SeatsNotBookable`` is raised.
+
+    Seats may come from the invitation pool (``status='blocked'``) or be otherwise
+    available; a seat that's already ``booked`` is never taken.
+    """
+    seat_ids = list(dict.fromkeys(seat_ids))  # dedupe, keep order
+    if not seat_ids:
+        raise SeatsNotBookable("Chưa chọn ghế nào.")
+
+    # Atomically claim the seats. The status guard means two admins issuing at once,
+    # or a seat that just got sold, can't double-book: only truly bookable seats flip.
+    booked = db.execute(
+        update(Seat)
+        .where(Seat.id.in_(seat_ids), Seat.status.in_(("available", "blocked")))
+        .values(status="booked", held_by_cart=None, hold_expires_at=None)
+        .returning(Seat.id)
+    ).scalars().all()
+    if len(booked) != len(seat_ids):
+        db.rollback()  # undo the partial booking above
+        raise SeatsNotBookable("Một số ghế không còn trống để phát vé mời.")
+
+    order = Order(
+        order_code=_unique_order_code(db),
+        kind="comp",
+        cart_id=None,
+        buyer_name=guest_name,
+        email=email,
+        phone=phone or "",
+        amount_vnd=0,
+        status="paid",
+        items=[OrderItem(seat_id=sid, price_vnd=0) for sid in seat_ids],
+    )
+    db.add(order)
+    db.flush()  # assign order.id before minting tickets
+    for sid in seat_ids:
+        db.add(
+            Ticket(
+                order_id=order.id,
+                seat_id=sid,
+                ticket_code=secrets.token_hex(8).upper(),
+                qr_token=secrets.token_urlsafe(32),
+            )
+        )
+    db.commit()
+    db.refresh(order)
+
+    # Same delivery path as a paid order; failure must not undo the booking.
+    try:
+        from app.services import tickets as ticket_svc
+
+        ticket_svc.send_ticket_email(db, order.order_code)
+    except Exception:
+        log.exception("Failed to email invitation e-tickets for order %s", order.order_code)
+
     return order
 
 

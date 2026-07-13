@@ -19,7 +19,7 @@ from app.services import holds
 def seat():
     """A throwaway available seat (+ tier), cleaned up afterwards."""
     db = SessionLocal()
-    tier = PriceTier(name="TEST", color_hex="#000000", price_vnd=1000)
+    tier = PriceTier(name="TEST", price_vnd=1000)
     db.add(tier)
     db.flush()
     s = Seat(

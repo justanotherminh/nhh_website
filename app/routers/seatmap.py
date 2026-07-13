@@ -105,9 +105,11 @@ def seatmap(db: Session = Depends(get_db)) -> dict:
         "viewBox": f"{min_x} {min_y} {max_x - min_x} {max_y - min_y}",
         "seat": SEAT,
         "maxPerOrder": settings.max_seats_per_order,
+        # tiers come priciest-first; rank 0 = cheapest .. n-1 = priciest. The
+        # front-end colours seats by rank (see .seat-g.tier-r* in styles.css).
         "tiers": [
-            {"id": t.id, "name": t.name, "color": t.color_hex, "price": t.price_vnd}
-            for t in tiers
+            {"id": t.id, "name": t.name, "price": t.price_vnd, "rank": len(tiers) - 1 - i}
+            for i, t in enumerate(tiers)
         ],
         "seats": seat_dicts,
         "rowMarkers": list(row_markers.values()),

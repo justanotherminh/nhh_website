@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Soát vé — {{ app_name }}{% endblock %}
+{% block body_class %}checkin checkin--{{ result }}{% endblock %}
+{% block content %}
+<section class="checkin-result checkin-result--{{ result }}">
+  {% if result == "ready" %}
+    <div class="checkin-badge">✓</div>
+    <h1>SẴN SÀNG</h1>
+    <p class="checkin-seat">Đã đăng nhập soát vé</p>
+    <p class="checkin-when">Dùng ứng dụng Camera quét mã QR trên vé của khách.</p>
+  {% elif result == "valid" %}
+    <div class="checkin-badge">✓</div>
+    <h1>HỢP LỆ</h1>
+    <p class="checkin-seat">{{ seat.label }}</p>
+  {% elif result == "used" %}
+    <div class="checkin-badge">!</div>
+    <h1>ĐÃ CHECK-IN</h1>
+    <p class="checkin-seat">{{ seat.label }}</p>
+    <p class="checkin-when">Đã vào cửa lúc {{ checked_at }}</p>
+  {% else %}
+    <div class="checkin-badge">✕</div>
+    <h1>KHÔNG HỢP LỆ</h1>
+    <p class="checkin-seat">Vé không tồn tại</p>
+  {% endif %}
+
+  {% if ticket %}
+  <dl class="checkin-meta">
+    <div><dt>Đơn</dt><dd>{{ order.order_code }}{% if order.kind == "comp" %} · vé mời{% endif %}</dd></div>
+    <div><dt>Người mua</dt><dd>{{ order.buyer_name }}</dd></div>
+    <div><dt>Mã vé</dt><dd>{{ ticket.ticket_code }}</dd></div>
+  </dl>
+  {% endif %}
+</section>
+{% endblock %}

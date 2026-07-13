@@ -17,7 +17,7 @@ from app.services import holds, orders
 @pytest.fixture()
 def throwaway_seats():
     db = SessionLocal()
-    tier = PriceTier(name="TEST", color_hex="#123456", price_vnd=100_000)
+    tier = PriceTier(name="TEST", price_vnd=100_000)
     db.add(tier)
     db.flush()
     ids = []

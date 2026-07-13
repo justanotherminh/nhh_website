@@ -30,7 +30,7 @@ from payos.utils._compat import _create_signature_from_obj
 def throwaway_seats():
     """Three throwaway available seats (+ tier). Cleans up everything after."""
     db = SessionLocal()
-    tier = PriceTier(name="TEST", color_hex="#123456", price_vnd=100_000)
+    tier = PriceTier(name="TEST", price_vnd=100_000)
     db.add(tier)
     db.flush()
     ids = []

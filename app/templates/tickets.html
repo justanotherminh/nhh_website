@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Chọn ghế — {{ app_name }}{% endblock %}
+{% block body_class %}tickets{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
 <section class="tickets-head">
@@ -8,7 +9,7 @@
     Cuộn chuột để phóng to / thu nhỏ, kéo để di chuyển.</p>
   <ul class="legend">
     {% for t in tiers %}
-    <li><span class="swatch" style="background:{{ t.color_hex }}"></span>
+    <li><span class="swatch swatch--r{{ t.rank }}"></span>
       {{ t.name }} — {{ "{:,.0f}".format(t.price_vnd).replace(",", ".") }} đ
       <em>({{ t.available }}/{{ t.total }} trống)</em></li>
     {% endfor %}

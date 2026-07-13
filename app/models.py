@@ -28,8 +28,9 @@ class PriceTier(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
-    color_hex: Mapped[str] = mapped_column(String(7), nullable=False)
     price_vnd: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Colour is presentation, not domain data — it lives in the front-end palette
+    # (styles.css, keyed by price rank), not here. See seatmap.js / .seat-g.tier-r*.
 
     seats: Mapped[list[Seat]] = relationship(back_populates="tier")
 
@@ -114,6 +115,10 @@ class Ticket(Base):
     seat_id: Mapped[int] = mapped_column(ForeignKey("seats.id"), nullable=False)
     ticket_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     qr_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # Set the first time the ticket is scanned at the door; guards against re-entry.
+    checked_in_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     order: Mapped[Order] = relationship(back_populates="tickets")
     seat: Mapped[Seat] = relationship()
