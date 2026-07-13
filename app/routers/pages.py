@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import PriceTier, Seat
-from app.templates import templates
+from app.templates import static_url, templates
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ def _moment_images() -> list[str]:
     if not _MOMENTS_DIR.is_dir():
         return []
     return [
-        f"/static/img/moments/{p.name}"
+        static_url(f"img/moments/{p.name}")   # cache-busted, so swapped photos refresh
         for p in sorted(_MOMENTS_DIR.iterdir())
         if p.suffix.lower() in _MOMENT_EXTS
     ]

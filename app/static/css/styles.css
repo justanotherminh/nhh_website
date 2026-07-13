@@ -76,7 +76,8 @@ body.home .site-header nav a { color: #f3ece0; }
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;   /* fill the browser window; dvh accounts for mobile chrome */
-  background: #0b2036 url("/static/img/hero-watercolor.jpg") center center / cover no-repeat;
+  /* --hero is set inline on the element so the URL carries a cache-busting hash. */
+  background: #0b2036 var(--hero) center center / cover no-repeat;
   overflow: hidden;
 }
 .home-hero__overlay {
