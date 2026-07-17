@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.models import Order, OrderItem, Seat, Ticket
-from app.services import holds
+from app.services import holds, pricing
 
 log = logging.getLogger("orders")
 
@@ -63,7 +63,14 @@ def create_order_from_holds(
 
     holds.extend(db, cart_id, extend_seconds)
 
-    amount = sum(s.tier.price_vnd for s in seats)
+    # Apply the early-bird discount (if any) per seat, so the line items sum exactly
+    # to amount_vnd — the payOS charge and its item breakdown always reconcile.
+    percent = pricing.active_discount_percent()
+    items = [
+        OrderItem(seat_id=s.id, price_vnd=pricing.discounted_price(s.tier.price_vnd, percent))
+        for s in seats
+    ]
+    amount = sum(it.price_vnd for it in items)
     order = Order(
         order_code=_unique_order_code(db),
         kind="sale",
@@ -72,8 +79,9 @@ def create_order_from_holds(
         email=email,
         phone=phone,
         amount_vnd=amount,
+        discount_percent=percent,
         status="pending",
-        items=[OrderItem(seat_id=s.id, price_vnd=s.tier.price_vnd) for s in seats],
+        items=items,
     )
     db.add(order)
     db.commit()

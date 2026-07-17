@@ -293,7 +293,9 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 .checkout-form .btn { width: 100%; text-align: center; border: 0; cursor: pointer; }
 .order-seats { list-style: none; padding: 0; margin: 0 0 1rem; }
 .order-seats li { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-bottom: 1px dashed #e5e3df; }
-.order-total { display: flex; justify-content: space-between; gap: 1rem; font-size: 1.1rem; padding-top: .5rem; }
+.order-subtotal, .order-discount { display: flex; justify-content: space-between; gap: 1rem; margin: .3rem 0; }
+.order-discount { color: #12813f; font-weight: 600; }
+.order-total { display: flex; justify-content: space-between; gap: 1rem; font-size: 1.1rem; padding-top: .5rem; border-top: 1px solid #e5e3df; margin-top: .4rem; }
 .checkout-result { max-width: 560px; }
 .checkout-result h1 { margin-bottom: .5rem; }
 .dev-banner { background: #fff4d6; border: 1px solid #e6cf8f; border-radius: 6px; padding: .6rem .9rem; font-size: .85rem; margin-bottom: 1rem; }

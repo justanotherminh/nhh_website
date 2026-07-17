@@ -79,6 +79,10 @@ class Order(Base):
     phone: Mapped[str] = mapped_column(String(30), nullable=False)
 
     amount_vnd: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Early-bird discount actually applied to this order (percent; 0 = none). The
+    # per-seat OrderItem.price_vnd already reflect it and sum to amount_vnd; this is
+    # kept for honest receipts/reporting (list price vs. what was charged).
+    discount_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # 'pending' | 'paid' | 'cancelled' | 'expired'
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     payos_payment_link_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

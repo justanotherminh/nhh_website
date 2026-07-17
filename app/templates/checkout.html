@@ -15,10 +15,25 @@
         </li>
         {% endfor %}
       </ul>
+      {% if discount_percent %}
+      <p class="order-subtotal muted">
+        <span>Tạm tính ({{ seats|length }} ghế):</span>
+        <span>{{ "{:,.0f}".format(subtotal).replace(",", ".") }} đ</span>
+      </p>
+      <p class="order-discount">
+        <span>Ưu đãi mở bán sớm (−{{ discount_percent }}%):</span>
+        <span>−{{ "{:,.0f}".format(discount_amount).replace(",", ".") }} đ</span>
+      </p>
+      <p class="order-total">
+        <strong>Tổng thanh toán:</strong>
+        <strong>{{ "{:,.0f}".format(total).replace(",", ".") }} đ</strong>
+      </p>
+      {% else %}
       <p class="order-total">
         <strong>Tổng cộng ({{ seats|length }} ghế):</strong>
         <strong>{{ "{:,.0f}".format(total).replace(",", ".") }} đ</strong>
       </p>
+      {% endif %}
       <p class="muted small">Ghế của bạn được giữ tạm thời. Vui lòng hoàn tất
         thanh toán trong thời gian quy định, nếu không ghế sẽ được mở lại.</p>
     </div>

@@ -15,7 +15,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import Seat
 from app.services import cart as cartmod
-from app.services import holds, orders
+from app.services import holds, orders, pricing
 from app.services import payos_client
 from app.templates import templates
 
@@ -49,13 +49,18 @@ def checkout_form(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
     if not seats:
         # Nothing held (never selected, or the hold lapsed) -> back to the map.
         return RedirectResponse("/tickets", status_code=303)
-    total = sum(s.tier.price_vnd for s in seats)
+    subtotal = sum(s.tier.price_vnd for s in seats)
+    percent = pricing.active_discount_percent()
+    total = sum(pricing.discounted_price(s.tier.price_vnd, percent) for s in seats)
     return templates.TemplateResponse(
         request,
         "checkout.html",
         {
             "app_name": settings.app_name,
             "seats": seats,
+            "subtotal": subtotal,
+            "discount_percent": percent,
+            "discount_amount": subtotal - total,
             "total": total,
             "hold_ttl": settings.hold_ttl_seconds,
         },

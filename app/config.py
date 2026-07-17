@@ -1,4 +1,7 @@
 """Application settings, loaded from environment / .env (see .env.example)."""
+import datetime as dt
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +33,21 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "NHH 2026 <noreply@nhh.local>"
     smtp_use_tls: bool = False  # True for real SMTP (e.g. Gmail); False for Mailpit
+
+    # Early-bird discount (automatic, time-boxed). Percent 0 = disabled. If a
+    # deadline is set, every checkout before it gets the discount; after it, none.
+    # earlybird_until may be an ISO datetime; a naive value is read as Hanoi time.
+    # Change these in .env and restart — no redeploy needed.
+    earlybird_percent: int = 0
+    earlybird_until: dt.datetime | None = None
+
+    @field_validator("earlybird_until", mode="before")
+    @classmethod
+    def _blank_until_is_none(cls, v):
+        # A blank EARLYBIRD_UNTIL= in .env means "no deadline set", not a parse error.
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     # Seat holds (seconds)
     hold_ttl_seconds: int = 600  # 10 min while browsing
