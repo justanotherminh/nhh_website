@@ -156,6 +156,40 @@ def build_seatmap(db: Session) -> dict:
             boxes.append({"floor": floor, "c0": min(cxs), "r0": min(cys) - 1,
                           "c1": max(cxs), "r1": max(cys)})
 
+    # Join up same-floor blocks that sit side by side, so the rear stalls read as
+    # one box rather than a pair straddling the centre aisle. Only where the
+    # merged box stays clear of every other box and of other floors' seats —
+    # which is what stops the two side strips of a floor from merging into one
+    # slab across the whole hall.
+    def overlaps(a, b):
+        return (a["c0"] <= b["c1"] and a["c1"] >= b["c0"]
+                and a["r0"] <= b["r1"] and a["r1"] >= b["r0"])
+
+    merged = True
+    while merged:
+        merged = False
+        for i, a in enumerate(boxes):
+            for j, b in list(enumerate(boxes))[i + 1:]:
+                if a["floor"] != b["floor"]:
+                    continue
+                u = {
+                    "floor": a["floor"],
+                    "c0": min(a["c0"], b["c0"]), "r0": min(a["r0"], b["r0"]),
+                    "c1": max(a["c1"], b["c1"]), "r1": max(a["r1"], b["r1"]),
+                }
+                if any(overlaps(u, o) for k, o in enumerate(boxes) if k not in (i, j)):
+                    continue
+                if any(u["c0"] <= x <= u["c1"] and u["r0"] <= y <= u["r1"]
+                       for f, cs in cells_by_floor.items() if f != u["floor"]
+                       for x, y in cs):
+                    continue
+                boxes[i] = u
+                boxes.pop(j)
+                merged = True
+                break
+            if merged:
+                break
+
     # The stalls box takes in the stage and the walls/doors flanking it, which
     # otherwise hang outside the box. It's the block sitting closest above the
     # stage and overlapping it horizontally.
