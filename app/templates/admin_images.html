@@ -19,14 +19,24 @@
   </form>
 
   {% if images %}
-  <p class="muted small">{{ images|length }} ảnh. Bấm địa chỉ để sao chép — dùng để chèn ảnh vào trang.</p>
+  <p class="muted small">{{ images|length }} ảnh —
+    <strong>{{ images|selectattr('in_reel')|list|length }}</strong> đang hiển thị trên trang chủ.
+    Ảnh tải lên được tự động nén lại cho web.</p>
   <div class="img-grid">
     {% for im in images %}
-    <figure class="img-card">
+    <figure class="img-card {% if im.in_reel %}img-card--reel{% endif %}">
       <a href="{{ im.url }}" target="_blank"><img src="{{ im.url }}?v={{ im.mtime }}" alt="{{ im.name }}" loading="lazy"></a>
+      {% if im.in_reel %}<span class="img-badge">Trang chủ</span>{% endif %}
       <figcaption>
         <input class="img-url" value="{{ im.url }}" readonly onclick="this.select();document.execCommand&&document.execCommand('copy')">
         <span class="img-meta">{{ im.dims }} · {{ im.kb }} KB</span>
+        <form method="post" action="/admin/images/reel" class="img-actions">
+          <input type="hidden" name="name" value="{{ im.name }}">
+          {% if not im.in_reel %}<input type="hidden" name="on" value="1">{% endif %}
+          <button type="submit" class="btn btn-secondary small-btn">
+            {% if im.in_reel %}Bỏ khỏi trang chủ{% else %}Hiện trên trang chủ{% endif %}
+          </button>
+        </form>
         <form method="post" action="/admin/images/delete"
               onsubmit="return confirm('Xoá {{ im.name }}?');">
           <input type="hidden" name="name" value="{{ im.name }}">
@@ -37,7 +47,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="muted">Chưa có ảnh nào. Tải lên ảnh đầu tiên ở trên.</p>
+  <p class="muted">Chưa có ảnh nào. Tải lên ảnh đầu tiên ở trên — rồi bấm “Hiện trên trang chủ” để đưa vào reel.</p>
   {% endif %}
 </section>
 {% endblock %}

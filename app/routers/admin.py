@@ -192,6 +192,15 @@ def images_delete(name: str = Form(...)):
     return RedirectResponse("/admin/images?notice=Đã+xoá+ảnh.", status_code=303)
 
 
+@router.post("/images/reel")
+def images_reel(name: str = Form(...), on: str = Form("")):
+    """Show/hide an image on the homepage reel."""
+    show = bool(on)
+    images_svc.set_reel(name, show)
+    msg = "Đã+thêm+vào+trang+chủ." if show else "Đã+bỏ+khỏi+trang+chủ."
+    return RedirectResponse(f"/admin/images?notice={msg}", status_code=303)
+
+
 # ---------------------------------------------------------------- early-bird
 def _earlybird_status(cfg: dict) -> str:
     if not cfg["enabled"] or cfg["percent"] <= 0 or not cfg["start"] or not cfg["end"]:

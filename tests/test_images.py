@@ -25,20 +25,30 @@ def admin_creds(monkeypatch):
     return ("admin", "s3cret-test")
 
 
+def _snapshot() -> set[str]:
+    names = set()
+    for d in (img.UPLOAD_DIR, img.REEL_DIR):
+        if d.is_dir():
+            names |= {p.name for p in d.iterdir() if p.is_file()}
+    return names
+
+
 @pytest.fixture(autouse=True)
 def _clean_uploads():
-    """Remove any test files this module creates (keep the dir)."""
-    created = set(p.name for p in img.UPLOAD_DIR.iterdir()) if img.UPLOAD_DIR.is_dir() else set()
+    """Remove any test files this module creates (keep pre-existing ones)."""
+    before = _snapshot()
     yield
-    if img.UPLOAD_DIR.is_dir():
-        for p in list(img.UPLOAD_DIR.iterdir()):
-            if p.name not in created:
-                p.unlink()
+    for d in (img.UPLOAD_DIR, img.REEL_DIR):
+        if d.is_dir():
+            for p in list(d.iterdir()):
+                if p.is_file() and p.name not in before:
+                    p.unlink()
 
 
 def test_save_and_list_and_delete():
     name = img.save_upload("My Photo!.png", _png_bytes())
-    assert name.endswith(".png") and " " not in name and "!" not in name
+    # name is sanitised; the extension reflects the optimised encoding
+    assert name.startswith("my-photo") and " " not in name and "!" not in name
     listed = [i["name"] for i in img.list_images()]
     assert name in listed
     assert img.delete_image(name) is True
@@ -73,12 +83,58 @@ def test_admin_upload_route_and_serving(admin_creds):
         files={"files": ("banner.png", _png_bytes(), "image/png")},
     )
     assert r.status_code == 303 and "notice=" in r.headers["location"]
-    # it now appears in the listing and is served at /static/uploads/
+    # it now appears in the listing and is served from /static/uploads/
+    entry = next(i for i in img.list_images() if i["name"].startswith("banner"))
     page = c.get("/admin/images", auth=admin_creds).text
-    assert "/static/uploads/banner.png" in page
-    served = c.get("/static/uploads/banner.png")
+    assert entry["url"] in page
+    served = c.get(entry["url"])
     assert served.status_code == 200 and served.headers["content-type"].startswith("image/")
 
 
 def test_images_page_requires_auth():
     assert TestClient(app).get("/admin/images").status_code == 401
+
+
+def test_large_upload_is_downscaled():
+    """A huge photo is resized/recompressed so it can't bloat the homepage."""
+    big = _png_bytes(4000, 3000)
+    name = img.save_upload("huge.png", big)
+    entry = next(i for i in img.list_images() if i["name"] == name)
+    w, h = entry["dims"].split("×")
+    assert max(int(w), int(h)) == img.MAX_DIM      # longest edge capped
+    assert name.endswith(".jpg")                    # opaque -> JPEG
+
+
+def test_transparent_upload_stays_png():
+    buf = io.BytesIO()
+    Image.new("RGBA", (30, 20), (0, 0, 0, 0)).save(buf, format="PNG")
+    name = img.save_upload("logo.png", buf.getvalue())
+    assert name.endswith(".png")
+
+
+def test_reel_toggle_moves_image_and_feeds_homepage():
+    name = img.save_upload("moment.png", _png_bytes())
+    assert img.reel_relpaths() == [] or all("moment" not in r for r in img.reel_relpaths())
+
+    assert img.set_reel(name, True) is True
+    rels = img.reel_relpaths()
+    assert any(r.startswith("uploads/reel/") for r in rels)
+    entry = next(i for i in img.list_images() if i["name"].startswith("moment"))
+    assert entry["in_reel"] is True
+
+    # the homepage now serves the uploaded reel image instead of placeholders
+    html = TestClient(app).get("/").text
+    assert "/static/uploads/reel/" in html
+
+    # toggling off returns it to the library and off the homepage
+    assert img.set_reel(entry["name"], False) is True
+    assert all("moment" not in r for r in img.reel_relpaths())
+
+
+def test_admin_reel_toggle_route(admin_creds):
+    name = img.save_upload("banner2.png", _png_bytes())
+    c = TestClient(app)
+    r = c.post("/admin/images/reel", auth=admin_creds, follow_redirects=False,
+               data={"name": name, "on": "1"})
+    assert r.status_code == 303
+    assert any(name.rsplit(".", 1)[0] in rel for rel in img.reel_relpaths())

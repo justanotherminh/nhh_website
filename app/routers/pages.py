@@ -9,21 +9,26 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import get_db
 from app.models import PriceTier, Seat
+from app.services import images as images_svc
 from app.templates import static_url, templates
 
 router = APIRouter()
 
-# Hero "featured moments" carousel: any image dropped in this folder shows up,
-# sorted by filename. Empty folder -> the template falls back to placeholder cards.
+# Hero reel photos: whatever managers marked "show on homepage" in the admin image
+# library (stored in the uploads volume). Until they add any, fall back to the
+# bundled placeholder tiles so the hero is never empty.
 _MOMENTS_DIR = Path(__file__).resolve().parent.parent / "static" / "img" / "moments"
 _MOMENT_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
 def _moment_images() -> list[str]:
+    uploaded = images_svc.reel_relpaths()
+    if uploaded:
+        return [static_url(rel) for rel in uploaded]   # cache-busted
     if not _MOMENTS_DIR.is_dir():
         return []
     return [
-        static_url(f"img/moments/{p.name}")   # cache-busted, so swapped photos refresh
+        static_url(f"img/moments/{p.name}")
         for p in sorted(_MOMENTS_DIR.iterdir())
         if p.suffix.lower() in _MOMENT_EXTS
     ]
