@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Ưu đãi mở bán sớm — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Ưu đãi mở bán sớm</h1>
+    <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+  </div>
+
+  {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
+  {% if error %}<p class="flash flash-err">{{ error }}</p>{% endif %}
+
+  <p class="eb-status eb-status--{{ status }}">
+    {% if status == "active" %}Đang áp dụng ({{ cfg.percent }}%) — {{ window }}
+    {% elif status == "scheduled" %}Đã đặt lịch ({{ cfg.percent }}%) — bắt đầu {{ window }}
+    {% elif status == "ended" %}Đã kết thúc — {{ window }}
+    {% elif status == "invalid" %}Cấu hình chưa hợp lệ (kiểm tra thời gian)
+    {% else %}Chưa bật ưu đãi
+    {% endif %}
+  </p>
+
+  <form method="post" action="/admin/early-bird" class="eb-form">
+    <label class="eb-check">
+      <input type="checkbox" name="enabled" value="1" {% if cfg.enabled %}checked{% endif %}>
+      Bật ưu đãi mở bán sớm
+    </label>
+
+    <label>Mức giảm (%)
+      <input type="number" name="percent" min="0" max="100" step="1"
+             value="{{ cfg.percent or 10 }}">
+    </label>
+
+    <label>Bắt đầu
+      <input type="datetime-local" name="start" value="{{ cfg.start_raw }}">
+    </label>
+
+    <label>Kết thúc
+      <input type="datetime-local" name="end" value="{{ cfg.end_raw }}">
+    </label>
+
+    <p class="muted small">Thời gian theo giờ Việt Nam. Trong khoảng này, mọi đơn đặt vé
+      sẽ được giảm giá; ngoài khoảng, giá đầy đủ. Áp dụng ngay khi lưu — không cần khởi động lại.</p>
+
+    <button type="submit" class="btn">Lưu</button>
+  </form>
+</section>
+{% endblock %}

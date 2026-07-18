@@ -50,7 +50,7 @@ def checkout_form(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
         # Nothing held (never selected, or the hold lapsed) -> back to the map.
         return RedirectResponse("/tickets", status_code=303)
     subtotal = sum(s.tier.price_vnd for s in seats)
-    percent = pricing.active_discount_percent()
+    percent = pricing.active_discount_percent(db)
     total = sum(pricing.discounted_price(s.tier.price_vnd, percent) for s in seats)
     return templates.TemplateResponse(
         request,

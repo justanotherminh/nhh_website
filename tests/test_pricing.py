@@ -1,40 +1,72 @@
-"""Early-bird discount: window activation, rounding, order application, comps exempt."""
+"""Early-bird discount: DB-backed window, rounding, order application, comps exempt."""
 from __future__ import annotations
 
 import datetime as dt
 import uuid
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import delete, select
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import Order, OrderItem, PriceTier, Seat, Ticket
+from app.models import AppSetting, Order, OrderItem, PriceTier, Seat, Ticket
 from app.services import holds, orders, pricing
+
+_HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+@pytest.fixture(autouse=True)
+def _clean_promo():
+    """Reset the promo config before and after each test (shared dev DB)."""
+    def wipe():
+        db = SessionLocal()
+        db.execute(delete(AppSetting).where(AppSetting.key.like("earlybird_%")))
+        db.commit()
+        db.close()
+    wipe()
+    yield
+    wipe()
+
+
+def _set(enabled, percent, start, end):
+    db = SessionLocal()
+    pricing.set_earlybird(db, enabled=enabled, percent=percent, start=start, end=end)
+    db.close()
+
+
+def _hanoi(y, m, d, h=0):
+    return dt.datetime(y, m, d, h, tzinfo=_HANOI).astimezone(dt.timezone.utc)
 
 
 # ---------------------------------------------------------------- unit: helper
-def test_percent_zero_when_disabled(monkeypatch):
-    monkeypatch.setattr(settings, "earlybird_percent", 0)
-    monkeypatch.setattr(settings, "earlybird_until", None)
-    assert pricing.active_discount_percent() == 0
+def test_percent_zero_when_disabled():
+    _set(False, 10, "2026-08-01T00:00", "2026-09-01T00:00")
+    db = SessionLocal()
+    try:
+        assert pricing.active_discount_percent(db, _hanoi(2026, 8, 15)) == 0
+    finally:
+        db.close()
 
 
-def test_percent_needs_a_deadline(monkeypatch):
-    # A percent with no deadline is treated as OFF (never an accidental forever-sale).
-    monkeypatch.setattr(settings, "earlybird_percent", 10)
-    monkeypatch.setattr(settings, "earlybird_until", None)
-    assert pricing.active_discount_percent() == 0
+def test_percent_active_only_within_window():
+    _set(True, 10, "2026-08-01T00:00", "2026-09-01T00:00")
+    db = SessionLocal()
+    try:
+        assert pricing.active_discount_percent(db, _hanoi(2026, 7, 20)) == 0   # before
+        assert pricing.active_discount_percent(db, _hanoi(2026, 8, 15)) == 10  # inside
+        assert pricing.active_discount_percent(db, _hanoi(2026, 9, 10)) == 0   # after
+    finally:
+        db.close()
 
 
-def test_percent_active_before_and_inactive_after(monkeypatch):
-    monkeypatch.setattr(settings, "earlybird_percent", 10)
-    deadline = dt.datetime(2026, 8, 31, 23, 59, 59, tzinfo=dt.timezone.utc)
-    monkeypatch.setattr(settings, "earlybird_until", deadline)
-    before = dt.datetime(2026, 8, 1, tzinfo=dt.timezone.utc)
-    after = dt.datetime(2026, 9, 1, tzinfo=dt.timezone.utc)
-    assert pricing.active_discount_percent(before) == 10
-    assert pricing.active_discount_percent(after) == 0
+def test_incomplete_window_is_off():
+    _set(True, 10, "", "")
+    db = SessionLocal()
+    try:
+        assert pricing.active_discount_percent(db, _hanoi(2026, 8, 15)) == 0
+    finally:
+        db.close()
 
 
 def test_discounted_price_rounds_to_thousand():
@@ -74,12 +106,16 @@ def two_seats():
     db.close()
 
 
-def test_order_applies_discount_and_reconciles(two_seats, monkeypatch):
-    monkeypatch.setattr(settings, "earlybird_percent", 10)
-    monkeypatch.setattr(
-        settings, "earlybird_until",
-        dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1),
-    )
+def _wide_window(enabled=True, percent=10):
+    """Active-now window (yesterday .. tomorrow, Hanoi)."""
+    now = dt.datetime.now(_HANOI)
+    s = (now - dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+    e = (now + dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M")
+    _set(enabled, percent, s, e)
+
+
+def test_order_applies_discount_and_reconciles(two_seats):
+    _wide_window()
     cart = uuid.uuid4()
     db = SessionLocal()
     try:
@@ -90,21 +126,15 @@ def test_order_applies_discount_and_reconciles(two_seats, monkeypatch):
             phone="0900000000", extend_seconds=900,
         )
         assert order.discount_percent == 10
-        # 700k -> 630k each; total 1,260,000.
         assert [it.price_vnd for it in order.items] == [630_000, 630_000]
         assert order.amount_vnd == 1_260_000
-        # Line items always sum to the charged amount (payOS reconciliation).
         assert sum(it.price_vnd for it in order.items) == order.amount_vnd
     finally:
         db.close()
 
 
-def test_order_full_price_when_window_closed(two_seats, monkeypatch):
-    monkeypatch.setattr(settings, "earlybird_percent", 10)
-    monkeypatch.setattr(
-        settings, "earlybird_until",
-        dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1),  # already passed
-    )
+def test_order_full_price_when_window_closed(two_seats):
+    _wide_window(enabled=False)  # promo off
     cart = uuid.uuid4()
     db = SessionLocal()
     try:
@@ -121,12 +151,7 @@ def test_order_full_price_when_window_closed(two_seats, monkeypatch):
 
 
 def test_comp_order_is_never_discounted(two_seats, monkeypatch):
-    # Even mid early-bird window, an invitation stays free (separate code path).
-    monkeypatch.setattr(settings, "earlybird_percent", 10)
-    monkeypatch.setattr(
-        settings, "earlybird_until",
-        dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1),
-    )
+    _wide_window()  # promo active
     monkeypatch.setattr("app.services.tickets.send_ticket_email", lambda db, code: True)
     db = SessionLocal()
     try:

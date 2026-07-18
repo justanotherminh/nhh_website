@@ -23,6 +23,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 
+class AppSetting(Base):
+    """Runtime-editable key/value config (e.g. the early-bird promo), so managers
+    can change it from the admin UI without a redeploy."""
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(50), primary_key=True)
+    value: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+
+
 class PriceTier(Base):
     __tablename__ = "price_tiers"
 

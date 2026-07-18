@@ -429,6 +429,22 @@ body.checkin--invalid { background: #b02020; }
 .status-comp { background: #e3e0f5; color: #4b3f8a; }
 .link-btn { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
 
+/* ---- admin early-bird ---- */
+.eb-status { display: inline-block; padding: .5rem .9rem; border-radius: 8px; font-weight: 600; font-size: .9rem; margin: .3rem 0 1.4rem; }
+.eb-status--active { background: #d7f0dd; color: #1c6b34; }
+.eb-status--scheduled { background: #dbe8fb; color: #1c4b8a; }
+.eb-status--ended, .eb-status--off { background: #eee; color: #777; }
+.eb-status--invalid { background: #fbdcdc; color: #a12; }
+.eb-form { display: flex; flex-direction: column; gap: 1rem; max-width: 420px; }
+.eb-form label { font-weight: 600; font-size: .9rem; }
+.eb-form input[type="number"], .eb-form input[type="datetime-local"] {
+  display: block; margin-top: .35rem; padding: .55rem .7rem; width: 100%;
+  border: 1px solid #d8d5cf; border-radius: 6px; font-size: 1rem; font-family: inherit;
+}
+.eb-check { display: flex; align-items: center; gap: .5rem; font-weight: 600; }
+.eb-check input { width: auto; }
+.eb-form .btn { align-self: flex-start; }
+
 /* ---- admin invitations ---- */
 .admin-actions { display: flex; gap: .6rem; align-items: center; }
 .flash { padding: .6rem .9rem; border-radius: 6px; font-size: .9rem; margin: .5rem 0 1rem; }

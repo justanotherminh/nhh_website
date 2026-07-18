@@ -65,7 +65,7 @@ def create_order_from_holds(
 
     # Apply the early-bird discount (if any) per seat, so the line items sum exactly
     # to amount_vnd — the payOS charge and its item breakdown always reconcile.
-    percent = pricing.active_discount_percent()
+    percent = pricing.active_discount_percent(db)
     items = [
         OrderItem(seat_id=s.id, price_vnd=pricing.discounted_price(s.tier.price_vnd, percent))
         for s in seats

@@ -100,3 +100,49 @@ def test_admin_can_cancel_pending_order(throwaway_seats, admin_creds):
         assert all(s == "available" for s in statuses)
     finally:
         db.close()
+
+
+def _clear_promo():
+    from sqlalchemy import delete
+    from app.models import AppSetting
+    db = SessionLocal()
+    db.execute(delete(AppSetting).where(AppSetting.key.like("earlybird_%")))
+    db.commit()
+    db.close()
+
+
+def test_early_bird_requires_auth():
+    assert TestClient(app).get("/admin/early-bird").status_code == 401
+
+
+def test_early_bird_save_and_read_back(admin_creds):
+    _clear_promo()
+    try:
+        c = TestClient(app)
+        r = c.post("/admin/early-bird", auth=admin_creds, follow_redirects=False,
+                   data={"enabled": "1", "percent": "10",
+                         "start": "2026-08-01T00:00", "end": "2026-09-01T00:00"})
+        assert r.status_code == 303
+        from app.services import pricing
+        db = SessionLocal()
+        try:
+            cfg = pricing.get_earlybird(db)
+            assert cfg["enabled"] and cfg["percent"] == 10
+            assert cfg["start_raw"] == "2026-08-01T00:00"
+        finally:
+            db.close()
+    finally:
+        _clear_promo()
+
+
+def test_early_bird_rejects_backwards_window(admin_creds):
+    _clear_promo()
+    try:
+        c = TestClient(app)
+        r = c.post("/admin/early-bird", auth=admin_creds, follow_redirects=False,
+                   data={"enabled": "1", "percent": "10",
+                         "start": "2026-09-01T00:00", "end": "2026-08-01T00:00"})
+        assert r.status_code == 303
+        assert "error=" in r.headers["location"]
+    finally:
+        _clear_promo()

@@ -7,7 +7,11 @@ Caddy's HTTPS the Basic Auth password is the gate — keep it strong.
 from __future__ import annotations
 
 import base64
+import datetime as dt
 import secrets
+from zoneinfo import ZoneInfo
+
+_HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -19,6 +23,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import Order, OrderItem, PriceTier, Seat, Ticket
 from app.services import orders as orders_svc
+from app.services import pricing
 from app.services import tickets as tickets_svc
 from app.templates import templates
 
@@ -142,6 +147,64 @@ def run_sweep(db: Session = Depends(get_db)):
     """Run the stale-order expiry sweep immediately (instead of waiting 60s)."""
     orders_svc.expire_stale_orders(db)
     return RedirectResponse("/admin", status_code=303)
+
+
+# ---------------------------------------------------------------- early-bird
+def _earlybird_status(cfg: dict) -> str:
+    if not cfg["enabled"] or cfg["percent"] <= 0 or not cfg["start"] or not cfg["end"]:
+        return "off"
+    now = dt.datetime.now(dt.timezone.utc)
+    if cfg["start"] >= cfg["end"]:
+        return "invalid"
+    if now < cfg["start"]:
+        return "scheduled"
+    if now >= cfg["end"]:
+        return "ended"
+    return "active"
+
+
+@router.get("/early-bird", response_class=HTMLResponse)
+def early_bird_form(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    cfg = pricing.get_earlybird(db)
+    fmt = lambda d: d.astimezone(_HANOI).strftime("%H:%M %d/%m/%Y") if d else "—"
+    return templates.TemplateResponse(
+        request,
+        "admin_early_bird.html",
+        {
+            "app_name": settings.app_name,
+            "cfg": cfg,
+            "status": _earlybird_status(cfg),
+            "window": f"{fmt(cfg['start'])} → {fmt(cfg['end'])}",
+            "notice": request.query_params.get("notice"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.post("/early-bird")
+def early_bird_save(
+    enabled: str = Form(default=""),
+    percent: int = Form(default=10),
+    start: str = Form(default=""),
+    end: str = Form(default=""),
+    db: Session = Depends(get_db),
+):
+    on = bool(enabled)
+    start, end = start.strip(), end.strip()
+    if on and (not start or not end):
+        return RedirectResponse(
+            "/admin/early-bird?error=Cần+nhập+thời+gian+bắt+đầu+và+kết+thúc.",
+            status_code=303,
+        )
+    if on and start >= end:
+        return RedirectResponse(
+            "/admin/early-bird?error=Thời+gian+kết+thúc+phải+sau+thời+gian+bắt+đầu.",
+            status_code=303,
+        )
+    percent = max(0, min(100, percent))
+    pricing.set_earlybird(db, enabled=on, percent=percent, start=start, end=end)
+    msg = f"Đã+lưu+ưu+đãi+{percent}%25." if on else "Đã+tắt+ưu+đãi+mở+bán+sớm."
+    return RedirectResponse(f"/admin/early-bird?notice={msg}", status_code=303)
 
 
 # ---------------------------------------------------------------- invitations
