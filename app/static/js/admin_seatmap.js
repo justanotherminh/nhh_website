@@ -1,34 +1,18 @@
-// Self-contained SVG seat-map renderer with zoom/pan + selection.
-// Fetches /api/seatmap, draws the hall, lets the user pick up to maxPerOrder seats.
-// Zoom: mouse wheel, +/-/reset buttons, pinch (touch). Pan: drag / one-finger drag.
+// Admin invitation seat map: only VIP-reserved seats are clickable. Select them and
+// "Xuất vé in" opens a printable sheet of their tickets (minting any missing ones).
+// Same SVG render + pan/zoom as the buyer map, but selection is client-side only.
 (function () {
   "use strict";
   const SVGNS = "http://www.w3.org/2000/svg";
-  const fmtVnd = (n) => n.toLocaleString("vi-VN") + " đ";
-  const STATUS_POLL_MS = 10000;
-
-  async function postJSON(url, body) {
-    try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      let data = null;
-      try { data = await r.json(); } catch (_) {}
-      return { ok: r.ok, status: r.status, data };
-    } catch (_) {
-      return { ok: false, status: 0, data: null };
-    }
-  }
-
   const root = document.getElementById("seatmap");
   if (!root) return;
   const panel = document.getElementById("selection");
   const summary = document.getElementById("selection-summary");
-  const continueBtn = document.getElementById("continue-btn");
+  const exportBtn = document.getElementById("continue-btn");
+  const exportForm = document.getElementById("exportForm");
+  const exportIds = document.getElementById("export-seat-ids");
 
-  const selected = new Map(); // seatId -> {seat, tier}
+  const selected = new Map(); // seatId -> seat
 
   function el(name, attrs, parent) {
     const e = document.createElementNS(SVGNS, name);
@@ -37,7 +21,7 @@
     return e;
   }
 
-  fetch("/api/seatmap")
+  fetch("/admin/invitations/map")
     .then((r) => r.json())
     .then((data) => render(data))
     .catch((err) => {
@@ -53,7 +37,6 @@
     root.innerHTML = "";
     root.appendChild(svg);
 
-    // ---- content bounds (from the data's viewBox) ----
     const bv = data.viewBox.split(" ").map(Number);
     const content = { x: bv[0], y: bv[1], w: bv[2], h: bv[3] };
 
@@ -62,7 +45,7 @@
       el("rect", { x: a.x, y: a.y, width: a.w, height: a.h, rx: 3, class: "arch arch-" + a.type }, svg);
       const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
       const attrs = { x: cx, y: cy, class: "arch-label", "text-anchor": "middle", "dominant-baseline": "central" };
-      if (a.h > a.w) attrs.transform = `rotate(-90 ${cx} ${cy})`; // vertical box -> vertical text
+      if (a.h > a.w) attrs.transform = `rotate(-90 ${cx} ${cy})`;
       el("text", attrs, svg).textContent = a.label;
     });
 
@@ -78,118 +61,40 @@
 
     // ---- seats ----
     const sz = data.seat;
-    const seatReg = new Map(); // <g> element -> entry  (available seats only)
-    const seatById = new Map(); // seat.id -> entry
+    const seatReg = new Map(); // <g> -> entry (VIP seats only)
     data.seats.forEach((s) => {
       const tier = tierById[s.tier_id];
-      // Colour comes from the tier's price rank via CSS (.seat-g.tier-r*), not JS.
       const rank = tier ? tier.rank : 0;
       const g = el("g", { class: "seat-g tier-r" + rank }, svg);
-      // A seat is either buyable (available) or not; anything not available — sold,
-      // held by someone else, or VIP-reserved — renders identically as "taken".
-      const avail = s.status === "available";
-      const rect = el("rect", {
-        x: s.x, y: s.y, width: sz, height: sz, rx: 3,
-        class: "seat " + (avail ? "seat-available" : "seat-taken"),
-      }, g);
+      const cls = s.vip ? (s.exported ? "seat seat-vip-done" : "seat seat-vip") : "seat seat-nonvip";
+      const rect = el("rect", { x: s.x, y: s.y, width: sz, height: sz, rx: 3, class: cls }, g);
       el("text", { x: s.x + sz / 2, y: s.y + sz / 2, class: "seat-num", "text-anchor": "middle", "dominant-baseline": "central" }, g).textContent = s.num;
-      if (avail) {
+      if (s.vip) {
         g.style.cursor = "pointer";
-        el("title", {}, g).textContent = `${s.label} — ${tier ? fmtVnd(tier.price) : ""}`;
-        const entry = { seat: s, rect, g, tier, taken: false, busy: false };
-        seatReg.set(g, entry);
-        seatById.set(s.id, entry);
+        el("title", {}, g).textContent = s.label + (s.exported ? " — đã xuất vé" : "");
+        seatReg.set(g, { seat: s, g, rect });
       }
     });
 
-    // Mark/unmark a seat as taken by someone else (greys it out, not clickable).
-    function setTaken(entry, taken) {
-      if (entry.taken === taken) return;
-      entry.taken = taken;
-      entry.g.classList.toggle("seat-g-taken", taken);
-      entry.rect.classList.toggle("seat-taken", taken);
-      entry.g.style.cursor = taken ? "default" : "pointer";
-    }
-
-    async function toggle(entry) {
-      if (entry.busy || entry.taken) return;
-      const { seat, g, tier } = entry;
-      entry.busy = true;
-      g.classList.add("seat-g-busy");
-      try {
-        if (selected.has(seat.id)) {
-          await postJSON("/api/release", { seat_id: seat.id });
-          selected.delete(seat.id);
-          g.classList.remove("selected");
-          updatePanel();
-        } else {
-          if (selected.size >= data.maxPerOrder) {
-            alert("Bạn chỉ có thể chọn tối đa " + data.maxPerOrder + " ghế mỗi lần.");
-            return;
-          }
-          const res = await postJSON("/api/hold", { seat_id: seat.id });
-          if (!res.ok) {
-            if (res.status === 409) {
-              setTaken(entry, true);
-              alert((res.data && res.data.detail) || "Ghế này vừa được người khác chọn.");
-            } else {
-              alert("Không giữ được ghế, vui lòng thử lại.");
-            }
-            return;
-          }
-          selected.set(seat.id, { seat, tier });
-          g.classList.add("selected");
-          updatePanel();
-        }
-      } finally {
-        entry.busy = false;
-        g.classList.remove("seat-g-busy");
-      }
-    }
-
-    // Reconcile the map with server truth: grey out seats others took, restore
-    // this cart's own held seats (e.g. after a reload), free seats that reopened.
-    function applyStatus(st) {
-      const takenSet = new Set(st.taken || []);
-      const yoursSet = new Set(st.yours || []);
-      seatById.forEach((entry, id) => {
-        setTaken(entry, takenSet.has(id) && !yoursSet.has(id));
-        if (yoursSet.has(id) && !selected.has(id)) {
-          selected.set(id, { seat: entry.seat, tier: entry.tier });
-          entry.g.classList.add("selected");
-        }
-        // A seat we thought we held but the server no longer credits to us.
-        if (selected.has(id) && !yoursSet.has(id)) {
-          selected.delete(id);
-          entry.g.classList.remove("selected");
-        }
-      });
+    function toggle(entry) {
+      const { seat, g } = entry;
+      if (selected.has(seat.id)) { selected.delete(seat.id); g.classList.remove("selected"); }
+      else { selected.set(seat.id, seat); g.classList.add("selected"); }
       updatePanel();
     }
 
-    async function refreshStatus() {
-      try {
-        const r = await fetch("/api/seats/status");
-        if (r.ok) applyStatus(await r.json());
-      } catch (_) {}
-    }
-    refreshStatus();
-    setInterval(refreshStatus, STATUS_POLL_MS);
-
-    // ===== zoom / pan via viewBox =====
+    // ===== zoom / pan via viewBox (same as the buyer map) =====
     const vb = { x: content.x, y: content.y, w: content.w, h: content.h };
-    let MIN_W = 240;        // most zoomed-in
-    let fitW = content.w;   // most zoomed-out (set in fit())
+    let fitW = content.w;
     let dragged = false;
+    const MIN_W = 240;
 
     function aspect() {
       const r = svg.getBoundingClientRect();
       return r.height / r.width || content.h / content.w;
     }
     function apply() {
-      // keep viewBox aspect equal to the element's aspect (no letterboxing)
       vb.h = vb.w * aspect();
-      // clamp pan so content stays roughly in view
       const maxX = content.x + content.w - vb.w * 0.15;
       const minX = content.x - vb.w * 0.85;
       const maxY = content.y + content.h - vb.h * 0.15;
@@ -200,7 +105,6 @@
     }
     function fit() {
       const a = aspect();
-      // width needed so both content dimensions fit at this aspect
       fitW = Math.max(content.w, content.h / a);
       vb.w = fitW;
       vb.h = fitW * a;
@@ -208,14 +112,10 @@
       vb.y = content.y + content.h / 2 - vb.h / 2;
       apply();
     }
-    function clientFrac(cx, cy) {
-      const r = svg.getBoundingClientRect();
-      return { fx: (cx - r.left) / r.width, fy: (cy - r.top) / r.height };
-    }
     function zoomAt(cx, cy, factor) {
-      const { fx, fy } = clientFrac(cx, cy);
-      const ux = vb.x + fx * vb.w;
-      const uy = vb.y + fy * vb.h;
+      const r = svg.getBoundingClientRect();
+      const fx = (cx - r.left) / r.width, fy = (cy - r.top) / r.height;
+      const ux = vb.x + fx * vb.w, uy = vb.y + fy * vb.h;
       vb.w = Math.min(fitW, Math.max(MIN_W, vb.w / factor));
       vb.h = vb.w * aspect();
       vb.x = ux - fx * vb.w;
@@ -223,14 +123,11 @@
       apply();
     }
 
-    // wheel zoom
     svg.addEventListener("wheel", (e) => {
       e.preventDefault();
       zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15);
     }, { passive: false });
 
-    // pointer drag + pinch.  A non-dragging tap toggles the pressed seat
-    // (we can't rely on the `click` event because pointer-capture retargets it).
     const pointers = new Map();
     let lastDist = 0, downX = 0, downY = 0, downSeat = null;
     svg.addEventListener("pointerdown", (e) => {
@@ -274,14 +171,12 @@
       }
       downSeat = null;
     });
-    function cancelPointer(e) {
+    svg.addEventListener("pointercancel", (e) => {
       pointers.delete(e.pointerId);
       if (pointers.size < 2) lastDist = 0;
       downSeat = null;
-    }
-    svg.addEventListener("pointercancel", cancelPointer);
+    });
 
-    // buttons
     const center = () => {
       const r = svg.getBoundingClientRect();
       return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
@@ -290,13 +185,27 @@
     document.getElementById("zoom-out")?.addEventListener("click", () => { const c = center(); zoomAt(c.cx, c.cy, 1 / 1.4); });
     document.getElementById("zoom-reset")?.addEventListener("click", fit);
 
-    // "Tiếp tục" -> checkout (seats are already held server-side for this cart).
-    continueBtn?.addEventListener("click", () => {
-      if (!continueBtn.disabled) window.location.href = "/checkout";
+    // Export: put the selected ids on the form; mark them exported optimistically.
+    exportForm?.addEventListener("submit", (e) => {
+      if (!selected.size) { e.preventDefault(); return; }
+      exportIds.value = [...selected.keys()].join(",");
+      const done = [...selected.keys()];
+      setTimeout(() => {
+        done.forEach((id) => {
+          seatReg.forEach((entry) => {
+            if (entry.seat.id === id) {
+              entry.rect.classList.remove("seat-vip");
+              entry.rect.classList.add("seat-vip-done");
+              entry.g.classList.remove("selected");
+            }
+          });
+          selected.delete(id);
+        });
+        updatePanel();
+      }, 400);
     });
 
     window.addEventListener("resize", fit);
-    // initial fit (rAF so the element has been laid out)
     requestAnimationFrame(fit);
     updatePanel();
   }
@@ -304,16 +213,13 @@
   function updatePanel() {
     if (!panel) return;
     panel.innerHTML = "";
-    let total = 0;
-    const items = [...selected.values()].sort((a, b) => a.seat.label.localeCompare(b.seat.label, "vi"));
-    items.forEach(({ seat, tier }) => {
-      const price = tier ? tier.price : 0;
-      total += price;
+    const items = [...selected.values()].sort((a, b) => a.label.localeCompare(b.label, "vi"));
+    items.forEach((seat) => {
       const li = document.createElement("li");
-      li.innerHTML = `<span>${seat.label}</span><span>${fmtVnd(price)}</span>`;
+      li.innerHTML = `<span>${seat.label}</span>`;
       panel.appendChild(li);
     });
-    if (summary) summary.textContent = selected.size ? `${selected.size} ghế — ${fmtVnd(total)}` : "Chưa chọn ghế nào.";
-    if (continueBtn) continueBtn.disabled = selected.size === 0;
+    if (summary) summary.textContent = selected.size ? `${selected.size} ghế` : "Chưa chọn ghế nào.";
+    if (exportBtn) exportBtn.disabled = selected.size === 0;
   }
 })();

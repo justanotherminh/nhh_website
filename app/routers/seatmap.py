@@ -43,6 +43,14 @@ def _rect(ref: str) -> dict:
 
 @router.get("/seatmap")
 def seatmap(db: Session = Depends(get_db)) -> dict:
+    return build_seatmap(db)
+
+
+def build_seatmap(db: Session) -> dict:
+    """Assemble the hall layout JSON (geometry, tiers, seats, architecture).
+
+    Shared by the public seat-map endpoint and the admin invitation map.
+    """
     tiers = db.execute(select(PriceTier).order_by(PriceTier.price_vnd.desc())).scalars().all()
     seats = db.execute(select(Seat)).scalars().all()
 

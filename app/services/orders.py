@@ -165,24 +165,34 @@ def create_comp_order(
     return order
 
 
-def generate_reserved_tickets(db: Session, holder: str = "Vé mời (in sẵn)") -> int:
-    """Mint printable QR tickets for every reserved (blocked) seat, no email.
+def ensure_reserved_tickets(db: Session, seat_ids: list[int]) -> int:
+    """Make sure each given seat has a printable QR ticket, minting any that are
+    missing (no email). Used when a VIP seat's ticket is exported on demand.
 
-    For old-school guests without an address on file: books each blocked seat into a
-    single comp order and mints its ``Ticket`` (scannable at the door), so the seats
-    can be printed and handed out. Idempotent — a seat already booked/ticketed is
-    skipped, so re-running only covers newly-reserved seats. Returns how many were
-    generated.
+    Idempotent: seats that already have a ticket are left as-is; only seats that are
+    still available/blocked get a comp ticket minted (and booked). Returns how many
+    new tickets were minted.
     """
-    blocked = db.execute(
-        select(Seat.id).where(Seat.status == "blocked").order_by(Seat.id)
+    seat_ids = list(dict.fromkeys(seat_ids))
+    if not seat_ids:
+        return 0
+    have = set(
+        db.execute(
+            select(Ticket.seat_id).where(Ticket.seat_id.in_(seat_ids))
+        ).scalars().all()
+    )
+    need = db.execute(
+        select(Seat.id).where(
+            Seat.id.in_([s for s in seat_ids if s not in have]),
+            Seat.status.in_(("available", "blocked")),
+        )
     ).scalars().all()
-    if not blocked:
+    if not need:
         return 0
     create_comp_order(
-        db, seat_ids=list(blocked), guest_name=holder, email="", send_email=False,
+        db, seat_ids=list(need), guest_name="Vé mời (in sẵn)", email="", send_email=False,
     )
-    return len(blocked)
+    return len(need)
 
 
 def get_order(db: Session, order_code: int) -> Order | None:

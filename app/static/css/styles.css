@@ -114,27 +114,31 @@ body.home .site-header nav a { color: #f3ece0; }
   transition: transform .12s, box-shadow .12s, background .15s;
 }
 .home-hero__cta:hover { transform: translateY(-2px); background: rgba(255, 255, 255, .92); box-shadow: 0 10px 28px rgba(8, 20, 45, .34); }
-.home-hero__featured { flex: 1 1 460px; position: relative; align-self: stretch; }
+.home-hero__featured { flex: 0 0 360px; position: relative; align-self: stretch; }
 
-/* Featured-moment carousel: wide rounded photo cards that orbit a hub sitting off
-   the right edge. Each card's long axis points at the hub (radial spokes). The
-   wheel rolls when the pointer moves toward the top/bottom of the hero. All motion
-   (orbit position + radial rotation) is driven by moments.js. */
-.moments { position: absolute; inset: 0; overflow: hidden; }
+/* Featured-moment reel: a vertical column of photo cards that scrolls continuously
+   and loops seamlessly, fading out at the top and bottom edges (mask). It drifts on
+   its own and follows the pointer (toward the top/bottom scrolls the reel). Motion
+   is driven by moments.js; the edge fade is the CSS mask below. */
+.reel {
+  position: absolute; inset: 0; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 84%, transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 84%, transparent 100%);
+}
+.reel-track {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  will-change: transform;
+}
 .moment {
-  position: absolute; top: 0; left: 0;
-  width: 264px; height: 152px;
-  border-radius: 18px;
-  overflow: hidden;
-  box-shadow: 0 10px 26px rgba(8, 20, 45, .34);
-  transform-origin: center;
-  transition: transform .18s ease-out, box-shadow .18s ease-out;
-  will-change: transform, opacity;
+  flex: none;
+  width: 320px; aspect-ratio: 4 / 3;
+  border-radius: 20px; overflow: hidden;
+  box-shadow: 0 14px 34px rgba(8, 20, 45, .34);
+  transition: transform .2s ease-out;
 }
 .moment img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.moment:hover { --scale: 1.1; box-shadow: 0 16px 38px rgba(8, 20, 45, .48); }
-/* While the wheel is actively rolling, drop the transition so the orbit never lags. */
-.moments.rolling .moment { transition: box-shadow .18s ease-out; }
+.moment:hover { transform: scale(1.03); }
 
 @media (max-width: 760px) {
   .home-hero { min-height: 100svh; }
@@ -228,13 +232,23 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 
 .seat-g:hover .seat.seat-available { stroke-width: 2.5; }
 
+/* Admin invitation map: VIP seats stand out and are clickable; others are dimmed. */
+.seat.seat-vip { fill: #f7dfa8 !important; stroke: #c8912f !important; }
+.seat.seat-vip-done { fill: #bfe3cc !important; stroke: #4f9d69 !important; }
+.seat.seat-nonvip { fill: #d9dde2 !important; stroke: #c4c9d0 !important; opacity: .5; }
+.seat-g:hover .seat.seat-vip, .seat-g:hover .seat.seat-vip-done { stroke-width: 2.5; }
+.swatch--vip { background: #f7dfa8; border-color: #c8912f; }
+.swatch--vip-done { background: #bfe3cc; border-color: #4f9d69; }
+.swatch--nonvip { background: #d9dde2; }
+
 /* States override the tier palette (need !important to beat .seat-g.tier-r* ). */
 .seat-g.selected .seat { fill: #e89b2e !important; stroke: #b9781a !important; }
 .seat-g.selected .seat-num { fill: #1c2230 !important; }
 /* Booked / taken seats read as flat grey ("đã đặt"); blocked (pool) seats dim. */
-.seat.seat-booked { fill: #b8bfc7 !important; stroke: #9aa2ab !important; }
-.seat-booked ~ .seat-num { fill: #4b5560 !important; }
-.seat-blocked { opacity: .4; }
+/* One "unavailable" look for every non-available seat — sold, held by someone
+   else, or VIP-reserved all share this; the map never special-cases by status. */
+.seat.seat-taken { fill: #b8bfc7 !important; stroke: #9aa2ab !important; }
+.seat-taken ~ .seat-num { fill: #4b5560 !important; }
 .seat-g-taken { pointer-events: none; }
 .seat-g-busy { opacity: .6; }
 

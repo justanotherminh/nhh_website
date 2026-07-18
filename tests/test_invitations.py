@@ -134,46 +134,22 @@ def test_blocked_seat_cannot_be_held_publicly(seats3):
         db.close()
 
 
-def test_admin_issue_invitation_route(seats3, admin_creds):
-    c = TestClient(app)
-    r = c.post(
-        "/admin/invitations",
-        auth=admin_creds,
-        data={"guest_name": "Route Guest", "email": "route@example.com",
-              "phone": "0900000000", "seat_ids": [seats3[0]]},
-        follow_redirects=False,
+def test_public_hold_endpoint_refuses_blocked_seat(seats3):
+    """The buyer-facing /api/hold endpoint rejects a VIP (blocked) seat."""
+    db = SessionLocal()
+    db.execute(
+        Seat.__table__.update().where(Seat.id == seats3[0]).values(status="blocked")
     )
-    assert r.status_code == 303
-    db = SessionLocal()
-    try:
-        assert db.get(Seat, seats3[0]).status == "booked"
-    finally:
-        db.close()
-
-
-def test_admin_block_and_unblock_route(seats3, admin_creds):
+    db.commit()
+    db.close()
     c = TestClient(app)
-    # Reserve two seats by id.
-    r = c.post(
-        "/admin/invitations/block",
-        auth=admin_creds,
-        data={"identifiers": f"{seats3[0]}\n{seats3[1]}"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 303
-    db = SessionLocal()
-    try:
-        assert db.get(Seat, seats3[0]).status == "blocked"
-        assert db.get(Seat, seats3[1]).status == "blocked"
-    finally:
-        db.close()
+    r = c.post("/api/hold", json={"seat_id": seats3[0]})
+    assert r.status_code == 409  # cannot hold -> cannot buy
 
-    # Release the first back to public sale.
-    r = c.post(f"/admin/invitations/unblock/{seats3[0]}", auth=admin_creds, follow_redirects=False)
-    assert r.status_code == 303
-    db = SessionLocal()
-    try:
-        assert db.get(Seat, seats3[0]).status == "available"
-        assert db.get(Seat, seats3[1]).status == "blocked"
-    finally:
-        db.close()
+
+def test_admin_cannot_lock_seats():
+    """Seat reservation is single-source (the CSV importer); the admin has no
+    block/unblock endpoints, so those routes must not exist."""
+    c = TestClient(app)
+    assert c.post("/admin/invitations/block", data={"identifiers": "1"}).status_code == 404
+    assert c.post("/admin/invitations/unblock/1").status_code == 404

@@ -42,6 +42,18 @@ else:
     print(f"[entrypoint]   {count} seats already present -> skipping import")
 PY
 
+echo "[entrypoint] Reserving VIP seats from the seat-map file..."
+python - <<'PY'
+# Single source of truth for VIP seats: the CSV. Re-applied every boot so the
+# reserved set can't drift (idempotent: only 'available' seats get blocked, and
+# already-issued/booked VIP seats are left untouched). Never fatal to the boot.
+try:
+    from scripts.import_vip_seats import run
+    run()
+except Exception as exc:  # noqa: BLE001
+    print(f"[entrypoint]   VIP reserve skipped ({exc!r}); continuing")
+PY
+
 echo "[entrypoint] Starting Gunicorn (Uvicorn workers) on :8000..."
 exec gunicorn app.main:app \
     -k uvicorn.workers.UvicornWorker \

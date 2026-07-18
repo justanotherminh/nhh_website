@@ -34,6 +34,26 @@ def _load_list() -> list[tuple[str, str, int]]:
         ]
 
 
+def reserved_seat_ids(db) -> set[int]:
+    """Seat ids of the VIP-reserved seats (from the CSV), whatever their status.
+
+    VIP membership is defined by the CSV, not by seat status — a reserved seat may
+    be 'blocked' (not yet issued) or 'booked' (its ticket exported), and both count.
+    """
+    from sqlalchemy import select
+
+    from app.models import Seat
+
+    want = _load_list()
+    if not want:
+        return set()
+    rows = db.execute(
+        select(Seat.id, Seat.section, Seat.row_label, Seat.seat_number)
+    ).all()
+    wanted = set(want)
+    return {sid for sid, sec, rl, num in rows if (sec, rl, num) in wanted}
+
+
 def _regen(xlsx: str) -> None:
     """Dev-only: rebuild the CSV from a masterplan workbook's greyed cells."""
     import openpyxl

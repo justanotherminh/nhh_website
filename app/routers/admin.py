@@ -22,11 +22,13 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import settings
 from app.db import get_db
 from app.models import Order, OrderItem, PriceTier, Seat, Ticket
+from app.routers.seatmap import build_seatmap
 from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
 from app.services import tickets as tickets_svc
 from app.templates import templates
+from scripts.import_vip_seats import reserved_seat_ids
 
 _basic = HTTPBasic()
 
@@ -249,127 +251,54 @@ def early_bird_save(
 
 
 # ---------------------------------------------------------------- invitations
+# The invitation page is just the seat map: only the VIP-reserved seats are
+# clickable, and clicking one exports its printable ticket. Which seats are VIP is
+# defined in exactly one place — scripts/data/vip_reserved_seats.csv, applied on
+# boot by scripts/import_vip_seats — so the admin never locks/unlocks seats here.
 @router.get("/invitations", response_class=HTMLResponse)
-def invitations(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    """Invitation pool + issuance: reserved (blocked) seats and comp orders."""
-    pool = db.execute(
-        select(Seat)
-        .options(selectinload(Seat.tier))
-        .where(Seat.status == "blocked")
-        .order_by(Seat.section, Seat.row_label, Seat.seat_number)
-    ).scalars().all()
-    comps = db.execute(
-        select(Order)
-        .options(selectinload(Order.items))
-        .where(Order.kind == "comp")
-        .order_by(Order.created_at.desc())
-        .limit(50)
-    ).scalars().all()
-    # price -> rank (0 = cheapest) so the pool swatches match the seat-map palette.
-    prices = db.execute(select(PriceTier.price_vnd).order_by(PriceTier.price_vnd)).scalars().all()
-    rank_map = {p: i for i, p in enumerate(prices)}
+def invitations(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
-        request,
-        "admin_invitations.html",
-        {
-            "app_name": settings.app_name,
-            "pool": pool,
-            "comps": comps,
-            "rank_map": rank_map,
-            "notice": request.query_params.get("notice"),
-            "error": request.query_params.get("error"),
-        },
+        request, "admin_invitations.html", {"app_name": settings.app_name}
     )
 
 
-@router.post("/invitations")
-def issue_invitation(
-    guest_name: str = Form(...),
-    email: str = Form(...),
-    phone: str = Form(""),
-    seat_ids: list[int] = Form(default=[]),
+@router.get("/invitations/map")
+def invitations_map(db: Session = Depends(get_db)) -> dict:
+    """Seat-map JSON annotated for the admin: which seats are VIP, and which of
+    those have already had their ticket exported."""
+    data = build_seatmap(db)
+    vip_ids = reserved_seat_ids(db)
+    exported = set(
+        db.execute(
+            select(Ticket.seat_id).join(Order, Ticket.order_id == Order.id)
+            .where(Order.kind == "comp")
+        ).scalars().all()
+    )
+    for s in data["seats"]:
+        s["vip"] = s["id"] in vip_ids
+        s["exported"] = s["id"] in exported
+    return data
+
+
+@router.post("/invitations/print", response_class=HTMLResponse)
+def print_tickets(
+    request: Request,
+    seat_ids: str = Form(""),
     db: Session = Depends(get_db),
-):
-    """Issue a free e-ticket to a named guest for the selected pool seats."""
-    if not seat_ids:
-        return RedirectResponse("/admin/invitations?error=Chưa+chọn+ghế+nào.", status_code=303)
-    try:
-        order = orders_svc.create_comp_order(
-            db,
-            seat_ids=seat_ids,
-            guest_name=guest_name.strip(),
-            email=email.strip(),
-            phone=phone.strip(),
-        )
-    except orders_svc.SeatsNotBookable:
-        return RedirectResponse(
-            "/admin/invitations?error=Một+số+ghế+không+còn+trống.", status_code=303
-        )
-    return RedirectResponse(
-        f"/admin/invitations?notice=Đã+phát+{len(order.items)}+vé+mời+cho+{email.strip()}.",
-        status_code=303,
-    )
+) -> HTMLResponse:
+    """Print-ready sheet for the selected VIP seats. Mints any missing tickets, then
+    renders each as a card (seat + write-on name line + QR embedded as a data URI)."""
+    ids = [int(x) for x in seat_ids.split(",") if x.strip().isdigit()]
+    vip_ids = reserved_seat_ids(db)
+    ids = [i for i in ids if i in vip_ids]   # only ever print VIP seats
+    orders_svc.ensure_reserved_tickets(db, ids)
 
-
-@router.post("/invitations/block")
-def block_pool(identifiers: str = Form(""), db: Session = Depends(get_db)):
-    """Reserve seats into the invitation pool (available -> blocked).
-
-    ``identifiers`` is a free-text list (newline/comma separated) of seat ids or
-    exact seat labels. Only currently-available seats are moved; booked seats are
-    left alone and unknown tokens are reported back.
-    """
-    tokens = [t.strip() for t in identifiers.replace(",", "\n").splitlines() if t.strip()]
-    ids, missed = _resolve_seat_ids(db, tokens)
-    blocked = 0
-    if ids:
-        res = db.execute(
-            update(Seat)
-            .where(Seat.id.in_(ids), Seat.status == "available")
-            .values(status="blocked", held_by_cart=None, hold_expires_at=None)
-        )
-        db.commit()
-        blocked = res.rowcount
-    notice = f"Đã+giữ+{blocked}+ghế+cho+vé+mời."
-    if missed:
-        notice += f"+Không+tìm+thấy:+{len(missed)}."
-    return RedirectResponse(f"/admin/invitations?notice={notice}", status_code=303)
-
-
-@router.post("/invitations/unblock/{seat_id}")
-def unblock_pool_seat(seat_id: int, db: Session = Depends(get_db)):
-    """Return a reserved seat to public sale (blocked -> available)."""
-    db.execute(
-        update(Seat)
-        .where(Seat.id == seat_id, Seat.status == "blocked")
-        .values(status="available")
-    )
-    db.commit()
-    return RedirectResponse("/admin/invitations", status_code=303)
-
-
-@router.post("/invitations/generate")
-def generate_printed_tickets(db: Session = Depends(get_db)):
-    """Pre-mint QR tickets for all reserved (blocked) seats, for printout (no email)."""
-    n = orders_svc.generate_reserved_tickets(db)
-    return RedirectResponse(
-        f"/admin/invitations?notice=Đã+tạo+{n}+vé+mời+in+sẵn.", status_code=303
-    )
-
-
-@router.get("/invitations/print", response_class=HTMLResponse)
-def print_tickets(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    """Print-ready sheet of every invitation ticket: seat + a write-on name line + QR.
-
-    QR images are embedded as data URIs so the page is self-contained and prints
-    reliably (no 145 separate image requests)."""
     rows = db.execute(
         select(Ticket)
-        .join(Order, Ticket.order_id == Order.id)
         .options(selectinload(Ticket.seat))
-        .where(Order.kind == "comp")
+        .where(Ticket.seat_id.in_(ids))
         .order_by(Ticket.seat_id)
-    ).scalars().all()
+    ).scalars().all() if ids else []
     cards = [
         {
             "seat": t.seat.label,
@@ -385,20 +314,3 @@ def print_tickets(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
         "admin_print_tickets.html",
         {"app_name": settings.app_name, "cards": cards},
     )
-
-
-def _resolve_seat_ids(db: Session, tokens: list[str]) -> tuple[set[int], list[str]]:
-    """Map free-text tokens (seat id or exact label) to seat ids; report misses."""
-    ids: set[int] = set()
-    missed: list[str] = []
-    for tok in tokens:
-        seat = db.get(Seat, int(tok)) if tok.isdigit() else None
-        if seat is None:
-            seat = db.execute(
-                select(Seat).where(Seat.label == tok)
-            ).scalar_one_or_none()
-        if seat is None:
-            missed.append(tok)
-        else:
-            ids.add(seat.id)
-    return ids, missed

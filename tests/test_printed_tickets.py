@@ -1,4 +1,4 @@
-"""Pre-generated (printable) VIP tickets: bulk mint without email, and the print sheet."""
+"""Admin invitation map + per-seat printable export (VIP tickets on demand)."""
 from __future__ import annotations
 
 import pytest
@@ -49,15 +49,14 @@ def admin_creds(monkeypatch):
     return ("admin", "s3cret-test")
 
 
-def test_generate_mints_tickets_without_email(blocked_seats, monkeypatch):
+def test_ensure_mints_tickets_without_email(blocked_seats, monkeypatch):
     sent = []
     monkeypatch.setattr(tickets, "send_ticket_email",
                         lambda db, code: sent.append(code) or True)
     db = SessionLocal()
     try:
-        n = orders.generate_reserved_tickets(db)
-        assert n >= 3
-        # our 3 blocked seats are now booked with tickets
+        n = orders.ensure_reserved_tickets(db, blocked_seats)
+        assert n == 3
         statuses = db.execute(
             select(Seat.status).where(Seat.id.in_(blocked_seats))
         ).scalars().all()
@@ -68,16 +67,16 @@ def test_generate_mints_tickets_without_email(blocked_seats, monkeypatch):
         assert got == 3
     finally:
         db.close()
-    assert sent == []  # no email sent for pre-generated tickets
+    assert sent == []  # no email for exported tickets
 
 
-def test_generate_is_idempotent(blocked_seats, monkeypatch):
+def test_ensure_is_idempotent(blocked_seats, monkeypatch):
     monkeypatch.setattr(tickets, "send_ticket_email", lambda db, code: True)
     db = SessionLocal()
     try:
-        orders.generate_reserved_tickets(db)
-        # second run: our seats are already booked, so no new tickets for them
-        orders.generate_reserved_tickets(db)
+        assert orders.ensure_reserved_tickets(db, blocked_seats) == 3
+        # second call: all already have tickets -> nothing minted
+        assert orders.ensure_reserved_tickets(db, blocked_seats) == 0
         got = db.execute(
             select(func.count()).select_from(Ticket).where(Ticket.seat_id.in_(blocked_seats))
         ).scalar()
@@ -86,21 +85,38 @@ def test_generate_is_idempotent(blocked_seats, monkeypatch):
         db.close()
 
 
-def test_print_page_renders_qr_cards(blocked_seats, admin_creds, monkeypatch):
+def test_invitations_map_requires_auth():
+    assert TestClient(app).get("/admin/invitations/map").status_code == 401
+
+
+def test_invitations_map_returns_seats(admin_creds):
+    c = TestClient(app)
+    r = c.get("/admin/invitations/map", auth=admin_creds)
+    assert r.status_code == 200
+    data = r.json()
+    assert "seats" in data and data["seats"]
+    # every seat carries the admin annotations
+    s0 = data["seats"][0]
+    assert "vip" in s0 and "exported" in s0
+
+
+def test_print_requires_auth():
+    assert TestClient(app).post("/admin/invitations/print", data={"seat_ids": "1"}).status_code == 401
+
+
+def test_print_only_touches_vip_seats(blocked_seats, admin_creds, monkeypatch):
+    # These throwaway seats are NOT in the VIP CSV, so the print route must ignore
+    # them (mint nothing) and render an empty sheet.
     monkeypatch.setattr(tickets, "send_ticket_email", lambda db, code: True)
+    c = TestClient(app)
+    ids = ",".join(str(i) for i in blocked_seats)
+    r = c.post("/admin/invitations/print", auth=admin_creds, data={"seat_ids": ids})
+    assert r.status_code == 200
     db = SessionLocal()
     try:
-        orders.generate_reserved_tickets(db)
+        minted = db.execute(
+            select(func.count()).select_from(Ticket).where(Ticket.seat_id.in_(blocked_seats))
+        ).scalar()
+        assert minted == 0  # non-VIP seats never get tickets from this route
     finally:
         db.close()
-    c = TestClient(app)
-    r = c.get("/admin/invitations/print", auth=admin_creds)
-    assert r.status_code == 200
-    assert "Kính mời:" in r.text
-    assert "data:image/png;base64," in r.text  # embedded QR
-    for sid_label in ("PR Z960", "PR Z961", "PR Z962"):
-        assert sid_label in r.text
-
-
-def test_print_page_requires_auth():
-    assert TestClient(app).get("/admin/invitations/print").status_code == 401
