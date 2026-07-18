@@ -41,3 +41,9 @@ postgres_data/
 /*.webp
 /*.psd
 /*.ai
+
+# Working spreadsheets may contain budget / personnel / guest PII (e.g. the project
+# masterplan). Keep them out of git and the Docker image. The seat-map source
+# workbook is already tracked (the importer needs it) and this rule can't untrack it;
+# the reserved-seat list we DO ship lives in scripts/data/vip_reserved_seats.csv.
+*.xlsx
