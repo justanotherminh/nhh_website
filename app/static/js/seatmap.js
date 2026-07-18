@@ -57,10 +57,15 @@
     const bv = data.viewBox.split(" ").map(Number);
     const content = { x: bv[0], y: bv[1], w: bv[2], h: bv[3] };
 
-    // ---- floor regions ----
-    // Drawn first so they sit behind the seats.
+    // ---- floor blocks ----
+    // Drawn first so the shading and its label sit behind the seats.
     (data.floorRegions || []).forEach((r) => {
-      el("path", { d: r.d, class: "floor-region", "data-floor": r.floor }, svg);
+      el("path", { d: r.d, class: "floor-region" }, svg);
+      const t = el("text", {
+        x: r.cx, y: r.cy, class: "floor-label",
+        "text-anchor": "middle", "dominant-baseline": "central",
+      }, svg);
+      t.textContent = r.floor;
     });
 
     // ---- architecture ----
@@ -77,20 +82,6 @@
     el("rect", { x: st.x, y: st.y, width: st.w, height: st.h, rx: 6, class: "stage" }, svg);
     el("text", { x: st.x + st.w / 2, y: st.y + st.h / 2, class: "stage-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg).textContent = st.label;
 
-    // ---- floor labels ----
-    // The floors overlap in plan view, so hovering a label dims the other floors
-    // to make the boundary obvious (see .seatmap-svg[data-focus] in styles.css).
-    (data.floors || []).forEach((f) => {
-      const cx = f.x + f.w / 2, cy = f.y + f.h / 2;
-      const t = el("text", {
-        x: cx, y: cy, class: "floor-label floor-label-hoverable", "text-anchor": "middle",
-        "dominant-baseline": "central",
-      }, svg);
-      t.textContent = f.label;
-      t.addEventListener("mouseenter", () => svg.setAttribute("data-focus", f.label));
-      t.addEventListener("mouseleave", () => svg.removeAttribute("data-focus"));
-    });
-
     // ---- row markers ----
     data.rowMarkers.forEach((m) => {
       el("text", { x: m.x + data.seat / 2, y: m.y + data.seat / 2, class: "row-marker", "text-anchor": "middle", "dominant-baseline": "central" }, svg).textContent = m.label;
@@ -104,7 +95,7 @@
       const tier = tierById[s.tier_id];
       // Colour comes from the tier's price rank via CSS (.seat-g.tier-r*), not JS.
       const rank = tier ? tier.rank : 0;
-      const g = el("g", { class: "seat-g tier-r" + rank, "data-floor": s.section }, svg);
+      const g = el("g", { class: "seat-g tier-r" + rank }, svg);
       // A seat is either buyable (available) or not; anything not available — sold,
       // held by someone else, or VIP-reserved — renders identically as "taken".
       const avail = s.status === "available";

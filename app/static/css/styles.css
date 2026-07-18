@@ -259,41 +259,26 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 .arch-door { fill: #fff4d6; stroke: #e6cf8f; }
 .arch-label { fill: #8a8a8a; font-size: 8px; }
 
-/* Floor regions: an outline traced around each floor's seats. The hall's floors
-   interleave in plan view, so these lines are what separates them. Kept neutral
-   and dashed so they never compete with the tier colours of the seats. */
+/* Floor blocks: a light grey panel behind each floor's seats, named in place.
+   The hall's floors interleave in plan view, so these panels are what tells
+   them apart. Stroked in their own fill colour to round the corners and give
+   the seats a little breathing room inside the panel. */
 .floor-region {
-  fill: rgba(29, 53, 87, .035);
-  stroke: #9fb0c4;
-  stroke-width: 1.5;
-  stroke-dasharray: 7 5;
+  fill: #eceef1;
+  stroke: #eceef1;
+  stroke-width: 10;
   stroke-linejoin: round;
+  fill-rule: evenodd;
   pointer-events: none;
 }
-.seatmap-svg[data-focus] .floor-region { opacity: .25; transition: opacity .15s ease; }
-.seatmap-svg[data-focus="Tầng 1"] .floor-region[data-floor="Tầng 1"],
-.seatmap-svg[data-focus="Tầng 2"] .floor-region[data-floor="Tầng 2"],
-.seatmap-svg[data-focus="Tầng 3"] .floor-region[data-floor="Tầng 3"] {
-  opacity: 1;
-  fill: rgba(29, 53, 87, .09);
-  stroke: #1d3557;
-  stroke-dasharray: none;
-}
-
-/* Floor labels, naming each region as the source layout does. */
 .floor-label {
-  fill: #46566b;
+  fill: #7d8896;
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 1px;
+  pointer-events: none;
   user-select: none;
 }
-.floor-label-hoverable { cursor: help; }
-.floor-label-hoverable:hover { fill: #1d3557; }
-.seatmap-svg[data-focus] .seat-g { opacity: .18; transition: opacity .15s ease; }
-.seatmap-svg[data-focus="Tầng 1"] .seat-g[data-floor="Tầng 1"],
-.seatmap-svg[data-focus="Tầng 2"] .seat-g[data-floor="Tầng 2"],
-.seatmap-svg[data-focus="Tầng 3"] .seat-g[data-floor="Tầng 3"] { opacity: 1; }
 
 .selection-box {
   flex: 0 0 260px;

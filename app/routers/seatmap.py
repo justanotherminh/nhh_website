@@ -29,35 +29,53 @@ DOORS = [
 WALLS = ["AA5", "M14:M18", "BA14:BA18"]
 COLUMNS = ["U15:V15", "AR15:AS15", "F33:F34", "BH33:BH34"]
 
-# Floor labels, at the same spots the source spreadsheet puts them. The three
-# floors overlap in plan view (Tầng 3 wraps the sides, Tầng 2 sits at the back,
-# Tầng 1 is the stalls), so these labels are what tells them apart on the map.
-# Tầng 2 and 3 are labelled on both sides, mirroring the spreadsheet.
-FLOOR_LABELS = [
-    ("C10:I11", "Tầng 3"),
-    ("BE10:BJ11", "Tầng 3"),
-    ("F18:I19", "Tầng 2"),
-    ("BE18:BH19", "Tầng 2"),
-    ("AC30:AK31", "Tầng 1"),
-]
+# The three floors overlap in plan view: Tầng 3 wraps the sides, Tầng 2 sits at
+# the back, Tầng 1 is the stalls. Each is drawn as a shaded block behind its
+# seats and named in place — see the floor blocks built in build_seatmap.
 
 
-def _close(cells: set[tuple[int, int]]) -> set[tuple[int, int]]:
-    """Morphological closing (dilate then erode) with a 3x3 element.
+def _close(cells: set[tuple[int, int]], r: int = 2) -> set[tuple[int, int]]:
+    """Morphological closing (dilate then erode) with a (2r+1)-square element.
 
-    Bridges the one-cell aisles inside a floor so it outlines as a single region
-    instead of fragmenting, while leaving the outer extent untouched.
+    Bridges the aisles inside a floor — including the centre aisle that carries
+    the row letters — so each floor reads as one block per seating area rather
+    than fragmenting. Erosion restores the outer extent, so the block still hugs
+    the seats.
     """
-    nb = lambda x, y: [(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+    span = range(-r, r + 1)
+    nb = lambda x, y: [(x + dx, y + dy) for dx in span for dy in span]
     grown = {c for (x, y) in cells for c in nb(x, y)}
     return {(x, y) for (x, y) in grown if all(c in grown for c in nb(x, y))}
 
 
-def _trace(cells: set[tuple[int, int]]) -> list[str]:
-    """Outline a set of grid cells as SVG paths (one per disjoint piece).
+def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
+    """Split cells into connected blocks (4-connectivity)."""
+    todo, out = set(cells), []
+    while todo:
+        stack = [todo.pop()]
+        blob = set(stack)
+        while stack:
+            x, y = stack.pop()
+            for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if n in todo:
+                    todo.discard(n)
+                    blob.add(n)
+                    stack.append(n)
+        out.append(blob)
+    return out
+
+
+def _trace(cells: set[tuple[int, int]]) -> list[tuple[str, set[tuple[int, int]]]]:
+    """Outline cells as (svg_path, cells) per connected block."""
+    return [(_outline(blob), blob) for blob in _components(cells)]
+
+
+def _outline(cells: set[tuple[int, int]]) -> str:
+    """Trace one block's silhouette.
 
     Walks the cell borders that have no neighbour on the far side; interior
-    borders cancel out, so what remains is the silhouette.
+    borders cancel out, so what remains is the outline. A block with a hole
+    yields several subpaths, which fill-rule: evenodd renders correctly.
     """
     edges: dict[tuple[int, int], list[tuple[int, int]]] = {}
     for cx, cy in cells:
@@ -93,7 +111,7 @@ def _trace(cells: set[tuple[int, int]]) -> list[str]:
         ]
         if len(keep) >= 4:
             paths.append("M" + " L".join(f"{x},{y}" for x, y in keep) + " Z")
-    return paths
+    return " ".join(paths)
 
 
 def _rect(ref: str) -> dict:
@@ -166,23 +184,35 @@ def build_seatmap(db: Session) -> dict:
 
     stage = {**_rect(STAGE[0]), "label": STAGE[1]}
 
-    floors = [{"label": label, **_rect(ref)} for ref, label in FLOOR_LABELS]
-
-    # Region outlines, traced around each floor's actual seats. The floors
-    # interleave in plan view, so a bounding box per floor would just nest them.
+    # Floor blocks: a shaded panel behind each floor's seats, named in place. The
+    # floors interleave in plan view, so a bounding box per floor would just nest
+    # them — the shape is traced from the seats instead.
     cells_by_floor: dict[str, set[tuple[int, int]]] = {}
     for s in seats:
         cells_by_floor.setdefault(s.section, set()).add((int(s.svg_x), int(s.svg_y)))
-    floor_regions = [
-        {"floor": floor, "d": d}
-        for floor, cells in sorted(cells_by_floor.items())
-        for d in _trace(_close(cells))
-    ]
+
+    floor_regions = []
+    for floor, cells in sorted(cells_by_floor.items()):
+        # Extend one row upward to open a clear band for the floor name — the panel
+        # otherwise hugs the seats with nowhere free to put text. Only upward:
+        # padding sideways too would close the narrow gaps between the side strips
+        # and merge neighbouring floors into one grey mass.
+        closed = _close(cells)
+        panel = closed | {(x, y - 1) for (x, y) in closed}
+        for d, cells_in in _trace(panel):
+            top = min(c[1] for c in cells_in)
+            top_xs = [c[0] for c in cells_in if c[1] == top]
+            floor_regions.append({
+                "floor": floor,
+                "d": d,
+                "cx": (min(top_xs) * CELL + max(top_xs) * CELL + CELL) / 2,
+                "cy": top * CELL + CELL / 2,
+            })
 
     # viewBox bounds across seats + stage + architecture + floor labels.
     all_x = xs + [stage["x"], stage["x"] + stage["w"]]
     all_y = ys + [stage["y"], stage["y"] + stage["h"]]
-    for a in architecture + floors:
+    for a in architecture:
         all_x += [a["x"], a["x"] + a["w"]]
         all_y += [a["y"], a["y"] + a["h"]]
     min_x, max_x = min(all_x) - PAD, max(all_x) + PAD + SEAT
@@ -201,7 +231,6 @@ def build_seatmap(db: Session) -> dict:
         "seats": seat_dicts,
         "rowMarkers": list(row_markers.values()),
         "architecture": architecture,
-        "floors": floors,
         "floorRegions": floor_regions,
         "stage": stage,
     }

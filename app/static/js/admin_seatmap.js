@@ -40,9 +40,14 @@
     const bv = data.viewBox.split(" ").map(Number);
     const content = { x: bv[0], y: bv[1], w: bv[2], h: bv[3] };
 
-    // ---- floor regions ----
+    // ---- floor blocks ----
     (data.floorRegions || []).forEach((r) => {
-      el("path", { d: r.d, class: "floor-region", "data-floor": r.floor }, svg);
+      el("path", { d: r.d, class: "floor-region" }, svg);
+      const t = el("text", {
+        x: r.cx, y: r.cy, class: "floor-label",
+        "text-anchor": "middle", "dominant-baseline": "central",
+      }, svg);
+      t.textContent = r.floor;
     });
 
     // ---- architecture ----
@@ -58,16 +63,6 @@
     const st = data.stage;
     el("rect", { x: st.x, y: st.y, width: st.w, height: st.h, rx: 6, class: "stage" }, svg);
     el("text", { x: st.x + st.w / 2, y: st.y + st.h / 2, class: "stage-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg).textContent = st.label;
-
-    // ---- floor labels ----
-    // Static here: this map already dims non-VIP seats, so a hover-dim like the
-    // buyer map's would fight that emphasis.
-    (data.floors || []).forEach((f) => {
-      el("text", {
-        x: f.x + f.w / 2, y: f.y + f.h / 2, class: "floor-label",
-        "text-anchor": "middle", "dominant-baseline": "central",
-      }, svg).textContent = f.label;
-    });
 
     // ---- row markers ----
     data.rowMarkers.forEach((m) => {
