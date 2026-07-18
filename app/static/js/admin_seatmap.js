@@ -54,6 +54,16 @@
     el("rect", { x: st.x, y: st.y, width: st.w, height: st.h, rx: 6, class: "stage" }, svg);
     el("text", { x: st.x + st.w / 2, y: st.y + st.h / 2, class: "stage-label", "text-anchor": "middle", "dominant-baseline": "central" }, svg).textContent = st.label;
 
+    // ---- floor labels ----
+    // Static here: this map already dims non-VIP seats, so a hover-dim like the
+    // buyer map's would fight that emphasis.
+    (data.floors || []).forEach((f) => {
+      el("text", {
+        x: f.x + f.w / 2, y: f.y + f.h / 2, class: "floor-label",
+        "text-anchor": "middle", "dominant-baseline": "central",
+      }, svg).textContent = f.label;
+    });
+
     // ---- row markers ----
     data.rowMarkers.forEach((m) => {
       el("text", { x: m.x + data.seat / 2, y: m.y + data.seat / 2, class: "row-marker", "text-anchor": "middle", "dominant-baseline": "central" }, svg).textContent = m.label;

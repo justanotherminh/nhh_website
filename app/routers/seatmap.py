@@ -29,6 +29,18 @@ DOORS = [
 WALLS = ["AA5", "M14:M18", "BA14:BA18"]
 COLUMNS = ["U15:V15", "AR15:AS15", "F33:F34", "BH33:BH34"]
 
+# Floor labels, at the same spots the source spreadsheet puts them. The three
+# floors overlap in plan view (Tầng 3 wraps the sides, Tầng 2 sits at the back,
+# Tầng 1 is the stalls), so these labels are what tells them apart on the map.
+# Tầng 2 and 3 are labelled on both sides, mirroring the spreadsheet.
+FLOOR_LABELS = [
+    ("C10:I11", "Tầng 3"),
+    ("BE10:BJ11", "Tầng 3"),
+    ("F18:I19", "Tầng 2"),
+    ("BE18:BH19", "Tầng 2"),
+    ("AC30:AK31", "Tầng 1"),
+]
+
 
 def _rect(ref: str) -> dict:
     """Convert an A1[:B2] reference into a pixel rectangle."""
@@ -100,10 +112,12 @@ def build_seatmap(db: Session) -> dict:
 
     stage = {**_rect(STAGE[0]), "label": STAGE[1]}
 
-    # viewBox bounds across seats + stage + architecture.
+    floors = [{"label": label, **_rect(ref)} for ref, label in FLOOR_LABELS]
+
+    # viewBox bounds across seats + stage + architecture + floor labels.
     all_x = xs + [stage["x"], stage["x"] + stage["w"]]
     all_y = ys + [stage["y"], stage["y"] + stage["h"]]
-    for a in architecture:
+    for a in architecture + floors:
         all_x += [a["x"], a["x"] + a["w"]]
         all_y += [a["y"], a["y"] + a["h"]]
     min_x, max_x = min(all_x) - PAD, max(all_x) + PAD + SEAT
@@ -122,5 +136,6 @@ def build_seatmap(db: Session) -> dict:
         "seats": seat_dicts,
         "rowMarkers": list(row_markers.values()),
         "architecture": architecture,
+        "floors": floors,
         "stage": stage,
     }
