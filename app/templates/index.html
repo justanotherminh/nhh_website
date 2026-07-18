@@ -16,10 +16,12 @@
     {# Featured-moment carousel. Images auto-discovered from static/img/moments/;
        placeholder tiles show until the designer's photos are dropped in. #}
     <div class="home-hero__featured" aria-hidden="true">
-      <div class="moments">
-        {% for src in moments %}
-        <div class="moment"><img src="{{ src }}" alt="" loading="lazy"></div>
-        {% endfor %}
+      <div class="reel">
+        <div class="reel-track">
+          {% for src in moments %}
+          <div class="moment"><img src="{{ src }}" alt="" loading="lazy"></div>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </div>

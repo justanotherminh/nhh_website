@@ -1,91 +1,84 @@
-// Featured-moment carousel: wide photo cards evenly spaced around a circular hub
-// that sits just off the right edge of the hero. Each card orbits the hub and is
-// rotated so its horizontal centreline points straight at the hub (radial spokes).
-// The wheel rolls continuously while the pointer is near the top/bottom of the
-// hero (top -> one direction, bottom -> the other); the mid-height band is neutral.
-// Cards do nothing but orbit. Self-contained, no dependencies.
+// Featured-moment reel: a vertical column of photo cards that scrolls continuously
+// and loops seamlessly. It drifts upward on its own; moving the pointer toward the
+// top or bottom of the reel scrolls it that way (faster near the edges). The fade
+// at the top/bottom edges is a CSS mask on .reel. Works for any number of images.
+// Self-contained, no dependencies. Respects prefers-reduced-motion.
 (function () {
   "use strict";
-  const hero = document.querySelector(".home-hero");
-  const wrap = document.querySelector(".home-hero__featured");
-  const strip = document.querySelector(".moments");
-  if (!hero || !wrap || !strip) return;
+  const reel = document.querySelector(".reel");
+  const track = document.querySelector(".reel-track");
+  if (!reel || !track) return;
 
-  const cards = Array.prototype.slice.call(strip.querySelectorAll(".moment"));
-  if (!cards.length) return;
+  const originals = Array.prototype.slice.call(track.children);
+  if (!originals.length) return;
 
-  const N = cards.length;
-  const TWO_PI = Math.PI * 2;
-  const base = cards.map((_, i) => (i / N) * TWO_PI);   // even spacing around circle
-  const MAX_SPEED = 0.0125;                              // rad/frame at the extremes
-  const DEADZONE = 0.12;                                 // mid band that doesn't roll
+  const DRIFT = -0.35;      // gentle upward drift (px/frame); negative = up
+  const MAX = 3.2;          // top speed when the pointer is at an edge
+  const DEADZONE = 0.12;    // middle band with no pointer override
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  let cx = 0, cy = 0, R = 0;
-  function measure() {
-    const r = wrap.getBoundingClientRect();
-    R = Math.min(r.height * 0.42, 360);
-    cx = r.width - 24;          // hub just inside the right edge
-    cy = r.height / 2;
-  }
+  let period = 0;           // pixel height of one full set (the loop period)
 
-  function layout() {
-    for (let i = 0; i < N; i++) {
-      const t = base[i] + rot;                 // this card's angle on the wheel
-      const x = cx + R * Math.cos(t);
-      const y = cy + R * Math.sin(t);
-      // Radial rotation, offset by pi so left-side cards read upright (not flipped).
-      const phi = t - Math.PI;
-      // Front = left side of the hub (cos t < 0); fade out toward/behind the hub.
-      const front = -Math.cos(t);
-      const op = Math.max(0, Math.min(1, (front + 0.05) / 0.55));
-      const c = cards[i];
-      const z = String(Math.round((front + 1) * 100));
-      c.style.opacity = op.toFixed(3);
-      c.dataset.z = z;
-      if (c.style.zIndex !== "999") c.style.zIndex = z;   // keep a hovered card on top
-      c.style.transform =
-        "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px) " +
-        "translate(-50%,-50%) rotate(" + phi.toFixed(4) + "rad) scale(var(--scale,1))";
+  // Clone whole sets until the track is tall enough to cover the reel plus one
+  // spare set, so wrapping by one period is always seamless and gap-free.
+  function build() {
+    // reset to just the originals
+    while (track.children.length > originals.length) {
+      track.removeChild(track.lastChild);
     }
+    let guard = 0;
+    while (
+      track.scrollHeight < reel.clientHeight + track.scrollHeight / track.children.length * originals.length &&
+      guard++ < 8
+    ) {
+      originals.forEach((el) => track.appendChild(el.cloneNode(true)));
+    }
+    // ensure at least two sets exist for a valid period measurement
+    if (track.children.length < originals.length * 2) {
+      originals.forEach((el) => track.appendChild(el.cloneNode(true)));
+    }
+    period = track.children[originals.length].offsetTop - track.children[0].offsetTop;
   }
 
-  // Lift a hovered card to the top and let it zoom smoothly even while idle.
-  cards.forEach(function (c) {
-    c.addEventListener("pointerenter", function () { c.style.zIndex = "999"; });
-    c.addEventListener("pointerleave", function () { c.style.zIndex = c.dataset.z || "1"; });
-  });
-
-  let rot = 0, vel = 0, running = false;
-  function tick() {
-    if (Math.abs(vel) < 1e-5) { running = false; strip.classList.remove("rolling"); return; }
-    rot = (rot + vel) % TWO_PI;
-    layout();
-    requestAnimationFrame(tick);
-  }
-  function start() {
-    if (!running) { running = true; strip.classList.add("rolling"); requestAnimationFrame(tick); }
+  let y = 0, vel = DRIFT, raf = 0;
+  function frame() {
+    y += vel;
+    if (period > 0) {
+      if (y <= -period) y += period;
+      else if (y > 0) y -= period;
+    }
+    track.style.transform = "translateY(" + y.toFixed(2) + "px)";
+    raf = requestAnimationFrame(frame);
   }
 
   if (!reduce) {
-    // Only roll while the pointer is over the carousel area, not the whole hero.
-    wrap.addEventListener("pointermove", function (e) {
-      const r = wrap.getBoundingClientRect();
+    reel.addEventListener("pointermove", function (e) {
+      const r = reel.getBoundingClientRect();
       const ny = (e.clientY - r.top) / r.height - 0.5;   // -0.5 (top) .. 0.5 (bottom)
-      if (Math.abs(ny) < DEADZONE) { vel = 0; return; }
-      const k = (ny - Math.sign(ny) * DEADZONE) / (0.5 - DEADZONE); // 0..±1
-      vel = k * MAX_SPEED;                                // top -> negative, bottom -> positive
-      start();
+      if (Math.abs(ny) < DEADZONE) { vel = DRIFT; return; }
+      const k = (ny - Math.sign(ny) * DEADZONE) / (0.5 - DEADZONE); // ±1 at edges
+      vel = -k * MAX;   // pointer near top -> scroll down; near bottom -> scroll up
     });
-    wrap.addEventListener("pointerleave", function () { vel = 0; });
+    reel.addEventListener("pointerleave", function () { vel = DRIFT; });
   }
 
   let rz = 0;
   window.addEventListener("resize", function () {
     clearTimeout(rz);
-    rz = setTimeout(function () { measure(); layout(); }, 120);
+    rz = setTimeout(function () { y = 0; build(); }, 150);
   });
 
-  measure();
-  layout();
+  let started = false;
+  function start() {
+    if (started) return;
+    started = true;
+    build();
+    if (!reduce) raf = requestAnimationFrame(frame);
+  }
+
+  // Card heights come from CSS (aspect-ratio), so layout is valid immediately;
+  // build now for the initial position, then start the loop (load-safe).
+  build();
+  if (document.readyState === "complete") start();
+  else window.addEventListener("load", start);
 })();
