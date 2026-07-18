@@ -57,6 +57,12 @@
     const bv = data.viewBox.split(" ").map(Number);
     const content = { x: bv[0], y: bv[1], w: bv[2], h: bv[3] };
 
+    // ---- floor regions ----
+    // Drawn first so they sit behind the seats.
+    (data.floorRegions || []).forEach((r) => {
+      el("path", { d: r.d, class: "floor-region", "data-floor": r.floor }, svg);
+    });
+
     // ---- architecture ----
     data.architecture.forEach((a) => {
       el("rect", { x: a.x, y: a.y, width: a.w, height: a.h, rx: 3, class: "arch arch-" + a.type }, svg);

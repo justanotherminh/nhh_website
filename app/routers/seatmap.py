@@ -42,6 +42,60 @@ FLOOR_LABELS = [
 ]
 
 
+def _close(cells: set[tuple[int, int]]) -> set[tuple[int, int]]:
+    """Morphological closing (dilate then erode) with a 3x3 element.
+
+    Bridges the one-cell aisles inside a floor so it outlines as a single region
+    instead of fragmenting, while leaving the outer extent untouched.
+    """
+    nb = lambda x, y: [(x + dx, y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
+    grown = {c for (x, y) in cells for c in nb(x, y)}
+    return {(x, y) for (x, y) in grown if all(c in grown for c in nb(x, y))}
+
+
+def _trace(cells: set[tuple[int, int]]) -> list[str]:
+    """Outline a set of grid cells as SVG paths (one per disjoint piece).
+
+    Walks the cell borders that have no neighbour on the far side; interior
+    borders cancel out, so what remains is the silhouette.
+    """
+    edges: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for cx, cy in cells:
+        x0, y0 = cx * CELL, cy * CELL
+        x1, y1 = x0 + CELL, y0 + CELL
+        # Clockwise, so each piece traces in a consistent direction.
+        if (cx, cy - 1) not in cells: edges.setdefault((x0, y0), []).append((x1, y0))
+        if (cx + 1, cy) not in cells: edges.setdefault((x1, y0), []).append((x1, y1))
+        if (cx, cy + 1) not in cells: edges.setdefault((x1, y1), []).append((x0, y1))
+        if (cx - 1, cy) not in cells: edges.setdefault((x0, y1), []).append((x0, y0))
+
+    paths = []
+    while edges:
+        start = next(iter(edges))
+        pts, cur = [start], start
+        while True:
+            nxts = edges.get(cur)
+            if not nxts:
+                break
+            nxt = nxts.pop()
+            if not nxts:
+                del edges[cur]
+            pts.append(nxt)
+            cur = nxt
+            if cur == start:
+                break
+        # Drop collinear midpoints so the path is a clean rectilinear outline.
+        keep = [
+            p for i, p in enumerate(pts)
+            if not (0 < i < len(pts) - 1
+                    and (p[0] - pts[i - 1][0]) * (pts[i + 1][1] - p[1])
+                    == (p[1] - pts[i - 1][1]) * (pts[i + 1][0] - p[0]))
+        ]
+        if len(keep) >= 4:
+            paths.append("M" + " L".join(f"{x},{y}" for x, y in keep) + " Z")
+    return paths
+
+
 def _rect(ref: str) -> dict:
     """Convert an A1[:B2] reference into a pixel rectangle."""
     min_c, min_r, max_c, max_r = range_boundaries(ref)
@@ -114,6 +168,17 @@ def build_seatmap(db: Session) -> dict:
 
     floors = [{"label": label, **_rect(ref)} for ref, label in FLOOR_LABELS]
 
+    # Region outlines, traced around each floor's actual seats. The floors
+    # interleave in plan view, so a bounding box per floor would just nest them.
+    cells_by_floor: dict[str, set[tuple[int, int]]] = {}
+    for s in seats:
+        cells_by_floor.setdefault(s.section, set()).add((int(s.svg_x), int(s.svg_y)))
+    floor_regions = [
+        {"floor": floor, "d": d}
+        for floor, cells in sorted(cells_by_floor.items())
+        for d in _trace(_close(cells))
+    ]
+
     # viewBox bounds across seats + stage + architecture + floor labels.
     all_x = xs + [stage["x"], stage["x"] + stage["w"]]
     all_y = ys + [stage["y"], stage["y"] + stage["h"]]
@@ -137,5 +202,6 @@ def build_seatmap(db: Session) -> dict:
         "rowMarkers": list(row_markers.values()),
         "architecture": architecture,
         "floors": floors,
+        "floorRegions": floor_regions,
         "stage": stage,
     }
