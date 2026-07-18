@@ -12,13 +12,22 @@
 <div class="ticket-sheet">
   {% for c in cards %}
   <article class="print-ticket">
-    <div class="print-ticket__info">
-      <p class="print-ticket__event">Sông Trời · Nắng Hoàng Hôn</p>
-      <p class="print-ticket__seat">{{ c.seat }}</p>
-      <p class="print-ticket__invite">Kính mời: <span class="write-line"></span></p>
-      <p class="print-ticket__code">{{ c.code }}</p>
+    <div class="pt-body">
+      <p class="pt-eyebrow">Nắng Hoàng Hôn · Đêm nhạc gây quỹ từ thiện</p>
+      <p class="pt-wordmark">Sông Trời</p>
+      <span class="pt-kind">Vé mời</span>
+      <p class="pt-seat"><small>Vị trí</small>{{ c.seat }}</p>
+      <p class="pt-invite">Kính mời:<span class="pt-line"></span></p>
+      <div class="pt-foot">
+        <p class="pt-code">MÃ · {{ c.code }}</p>
+        <p class="pt-org">nanghoanghon.org</p>
+      </div>
     </div>
-    <img class="print-ticket__qr" src="{{ c.qr }}" alt="QR" width="132" height="132">
+    <div class="pt-stub">
+      <img class="pt-qr" src="{{ c.qr }}" alt="Mã QR" width="120" height="120">
+      <p class="pt-stub-cap">Quét tại cửa</p>
+      <p class="pt-stub-seat">{{ c.seat_short }}</p>
+    </div>
   </article>
   {% endfor %}
 </div>

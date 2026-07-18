@@ -354,28 +354,58 @@ body.checkin--invalid { background: #b02020; }
 .checkin-meta dt { opacity: .8; margin: 0; }
 .checkin-meta dd { margin: 0; font-weight: 600; text-align: right; }
 
-/* ---- printable invitation tickets ---- */
+/* ---- printable invitation tickets (Sông Trời) ---- */
+/* Placeholder design — self-contained palette so it prints independently of the
+   site theme; the design team can restyle .pt-* freely later. */
 .print-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
 .print-toolbar p { margin: 0; }
-.ticket-sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.ticket-sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+
 .print-ticket {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  border: 1px solid #c8ccd2; border-radius: 10px; padding: 14px 16px;
-  break-inside: avoid; background: #fff;
+  --pt-ink: #173250; --pt-indigo: #1b3a6b; --pt-azure: #2f80c8; --pt-aqua: #7fd0c8;
+  --pt-gold: #c8912f;
+  position: relative; display: flex; overflow: hidden; break-inside: avoid;
+  color: var(--pt-ink);
+  background: linear-gradient(180deg, #f8f3e8, #f2ead9);
+  border: 1px solid rgba(20,40,70,.16); border-radius: 12px;
+  box-shadow: 0 6px 16px rgba(18,38,66,.14);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
-.print-ticket__event { margin: 0 0 6px; font-size: .72rem; letter-spacing: 1px; text-transform: uppercase; color: #6b7280; }
-.print-ticket__seat { margin: 0 0 10px; font-size: 1.15rem; font-weight: 700; }
-.print-ticket__invite { margin: 0 0 8px; font-size: .9rem; }
-.print-ticket__invite .write-line { display: inline-block; min-width: 150px; border-bottom: 1px solid #333; }
-.print-ticket__code { margin: 0; font-size: .72rem; color: #9aa0a8; letter-spacing: .5px; }
-.print-ticket__qr { flex: 0 0 auto; width: 132px; height: 132px; }
+.print-ticket::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px;
+  background: linear-gradient(180deg, var(--pt-indigo), var(--pt-azure) 55%, var(--pt-aqua));
+}
+.pt-body { flex: 1; padding: 1.2rem 1.3rem 1.1rem 1.5rem; display: flex; flex-direction: column; }
+.pt-eyebrow { margin: 0; font-size: .58rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--pt-indigo); opacity: .72; }
+.pt-wordmark { margin: .1rem 0 .45rem; font-family: "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; font-style: italic; font-weight: 600; font-size: 2rem; line-height: .98; color: var(--pt-indigo); }
+.pt-kind { align-self: flex-start; font-size: .58rem; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #fff; background: var(--pt-gold); padding: .22rem .55rem; border-radius: 999px; margin-bottom: .8rem; }
+.pt-seat { margin: 0; font-size: 1.1rem; font-weight: 700; }
+.pt-seat small { display: block; font-size: .6rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: #6b7683; margin-bottom: .1rem; }
+.pt-invite { margin: .85rem 0 0; font-size: .9rem; display: flex; align-items: flex-end; gap: .5rem; }
+.pt-invite .pt-line { flex: 1; border-bottom: 1.5px solid rgba(23,50,80,.5); height: 1.1rem; }
+.pt-foot { margin-top: auto; padding-top: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.pt-code { margin: 0; font-size: .64rem; letter-spacing: .1em; color: rgba(23,50,80,.55); font-variant-numeric: tabular-nums; }
+.pt-org { margin: 0; font-size: .64rem; color: rgba(23,50,80,.55); }
+
+.pt-stub {
+  flex: none; width: 158px; padding: 1.1rem .9rem; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  border-left: 2px dashed rgba(23,50,80,.32); background: rgba(27,58,107,.045);
+}
+.pt-qr { width: 118px; height: 118px; display: block; padding: 6px; background: #fff; border-radius: 8px; }
+.pt-stub-cap { margin: .05rem 0 0; font-size: .58rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--pt-indigo); }
+.pt-stub-seat { margin: 0; font-size: .74rem; font-weight: 700; }
 
 @media print {
   body.printsheet .site-header, body.printsheet .site-footer, .print-toolbar { display: none !important; }
-  body.printsheet { background: #fff; }
+  body.printsheet { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-main { padding: 0; max-width: none; }
-  .ticket-sheet { gap: 0; }
-  .print-ticket { border-radius: 0; border-color: #999; }
+}
+
+@media (max-width: 680px) {
+  .ticket-sheet { grid-template-columns: 1fr; }
+  .print-ticket { flex-direction: column; }
+  .pt-stub { width: auto; border-left: 0; border-top: 2px dashed rgba(23,50,80,.32); }
 }
 
 /* ---- admin dashboard ---- */

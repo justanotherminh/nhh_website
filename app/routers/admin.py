@@ -269,6 +269,7 @@ def print_tickets(request: Request, db: Session = Depends(get_db)) -> HTMLRespon
     cards = [
         {
             "seat": t.seat.label,
+            "seat_short": f"{t.seat.row_label} · {t.seat.seat_number}",
             "code": t.ticket_code,
             "qr": "data:image/png;base64,"
             + base64.b64encode(tickets_svc.qr_png_bytes(t.qr_token)).decode(),
