@@ -65,11 +65,6 @@ def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
     return out
 
 
-def _trace(cells: set[tuple[int, int]]) -> list[tuple[str, set[tuple[int, int]]]]:
-    """Outline cells as (svg_path, cells) per connected block."""
-    return [(_outline(blob), blob) for blob in _components(cells)]
-
-
 def _outline(cells: set[tuple[int, int]]) -> str:
     """Trace one block's silhouette.
 
@@ -112,6 +107,29 @@ def _outline(cells: set[tuple[int, int]]) -> str:
         if len(keep) >= 4:
             paths.append("M" + " L".join(f"{x},{y}" for x, y in keep) + " Z")
     return " ".join(paths)
+
+
+LABEL_CELLS = 3    # cells a "Tầng N" label needs at its rendered size
+
+
+def _widen_band(blob: set[tuple[int, int]], hall_cx: float) -> set[tuple[int, int]]:
+    """Widen a block's top band so the floor name fits inside it.
+
+    The side strips are only a seat or two wide — narrower than their own label.
+    Widening happens away from the middle of the hall, into the empty margin, so
+    it can never run into a neighbouring floor's panel.
+    """
+    top = min(y for _, y in blob)
+    xs = [x for x, y in blob if y == top]
+    lo, hi = min(xs), max(xs)
+    need = LABEL_CELLS - (hi - lo + 1)
+    if need <= 0:
+        return blob
+    if (lo + hi) / 2 < hall_cx:
+        lo -= need
+    else:
+        hi += need
+    return blob | {(x, top) for x in range(lo, hi + 1)}
 
 
 def _rect(ref: str) -> dict:
@@ -191,6 +209,8 @@ def build_seatmap(db: Session) -> dict:
     for s in seats:
         cells_by_floor.setdefault(s.section, set()).add((int(s.svg_x), int(s.svg_y)))
 
+    hall_cx = (min(int(s.svg_x) for s in seats) + max(int(s.svg_x) for s in seats)) / 2
+
     floor_regions = []
     for floor, cells in sorted(cells_by_floor.items()):
         # Extend one row upward to open a clear band for the floor name — the panel
@@ -199,12 +219,13 @@ def build_seatmap(db: Session) -> dict:
         # and merge neighbouring floors into one grey mass.
         closed = _close(cells)
         panel = closed | {(x, y - 1) for (x, y) in closed}
-        for d, cells_in in _trace(panel):
-            top = min(c[1] for c in cells_in)
-            top_xs = [c[0] for c in cells_in if c[1] == top]
+        for blob in _components(panel):
+            blob = _widen_band(blob, hall_cx)
+            top = min(y for _, y in blob)
+            top_xs = [x for x, y in blob if y == top]
             floor_regions.append({
                 "floor": floor,
-                "d": d,
+                "d": _outline(blob),
                 "cx": (min(top_xs) * CELL + max(top_xs) * CELL + CELL) / 2,
                 "cy": top * CELL + CELL / 2,
             })
