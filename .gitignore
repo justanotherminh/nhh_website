@@ -47,3 +47,6 @@ postgres_data/
 # workbook is already tracked (the importer needs it) and this rule can't untrack it;
 # the reserved-seat list we DO ship lives in scripts/data/vip_reserved_seats.csv.
 *.xlsx
+
+# Manager-uploaded images (persistent volume in prod; runtime data, never committed)
+app/static/uploads/

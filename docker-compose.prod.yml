@@ -27,6 +27,9 @@ services:
         condition: service_healthy
     expose:
       - "8000"   # internal only; Caddy reverse-proxies to it
+    volumes:
+      # Manager-uploaded images: persist across rebuilds, served at /static/uploads/.
+      - uploads_data:/app/app/static/uploads
 
   caddy:
     image: caddy:2
@@ -45,3 +48,4 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  uploads_data:

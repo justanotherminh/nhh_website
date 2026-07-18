@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Hình ảnh — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Hình ảnh</h1>
+    <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+  </div>
+
+  {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
+  {% if error %}<p class="flash flash-err">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/admin/images" enctype="multipart/form-data" class="img-upload">
+    <label>Chọn ảnh (JPG, PNG, WEBP, GIF — tối đa 12 MB mỗi tệp)
+      <input type="file" name="files" accept="image/*" multiple required>
+    </label>
+    <button type="submit" class="btn">Tải lên</button>
+  </form>
+
+  {% if images %}
+  <p class="muted small">{{ images|length }} ảnh. Bấm địa chỉ để sao chép — dùng để chèn ảnh vào trang.</p>
+  <div class="img-grid">
+    {% for im in images %}
+    <figure class="img-card">
+      <a href="{{ im.url }}" target="_blank"><img src="{{ im.url }}?v={{ im.mtime }}" alt="{{ im.name }}" loading="lazy"></a>
+      <figcaption>
+        <input class="img-url" value="{{ im.url }}" readonly onclick="this.select();document.execCommand&&document.execCommand('copy')">
+        <span class="img-meta">{{ im.dims }} · {{ im.kb }} KB</span>
+        <form method="post" action="/admin/images/delete"
+              onsubmit="return confirm('Xoá {{ im.name }}?');">
+          <input type="hidden" name="name" value="{{ im.name }}">
+          <button type="submit" class="link-btn">Xoá</button>
+        </form>
+      </figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Chưa có ảnh nào. Tải lên ảnh đầu tiên ở trên.</p>
+  {% endif %}
+</section>
+{% endblock %}

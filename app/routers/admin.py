@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 _HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import func, select, update
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import settings
 from app.db import get_db
 from app.models import Order, OrderItem, PriceTier, Seat, Ticket
+from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
 from app.services import tickets as tickets_svc
@@ -147,6 +148,46 @@ def run_sweep(db: Session = Depends(get_db)):
     """Run the stale-order expiry sweep immediately (instead of waiting 60s)."""
     orders_svc.expire_stale_orders(db)
     return RedirectResponse("/admin", status_code=303)
+
+
+# ---------------------------------------------------------------- images
+@router.get("/images", response_class=HTMLResponse)
+def images_list(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "admin_images.html",
+        {
+            "app_name": settings.app_name,
+            "images": images_svc.list_images(),
+            "notice": request.query_params.get("notice"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.post("/images")
+async def images_upload(files: list[UploadFile] = File(default=[])):
+    saved, errors = 0, []
+    for f in files:
+        if not f or not f.filename:
+            continue
+        try:
+            images_svc.save_upload(f.filename, await f.read())
+            saved += 1
+        except images_svc.ImageError as exc:
+            errors.append(f"{f.filename}: {exc}")
+    if errors:
+        from urllib.parse import quote
+        return RedirectResponse(
+            f"/admin/images?error={quote(' · '.join(errors[:3]))}", status_code=303
+        )
+    return RedirectResponse(f"/admin/images?notice=Đã+tải+lên+{saved}+ảnh.", status_code=303)
+
+
+@router.post("/images/delete")
+def images_delete(name: str = Form(...)):
+    images_svc.delete_image(name)
+    return RedirectResponse("/admin/images?notice=Đã+xoá+ảnh.", status_code=303)
 
 
 # ---------------------------------------------------------------- early-bird
