@@ -259,16 +259,12 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 .arch-door { fill: #fff4d6; stroke: #e6cf8f; }
 .arch-label { fill: #8a8a8a; font-size: 8px; }
 
-/* Floor blocks: a light grey panel behind each floor's seats, named in place.
-   The hall's floors interleave in plan view, so these panels are what tells
-   them apart. Stroked in their own fill colour to round the corners and give
-   the seats a little breathing room inside the panel. */
+/* Floor blocks: a light grey box behind each floor's seats, named in place.
+   The hall's floors interleave in plan view, so these boxes are what tells
+   them apart. The stalls box also takes in the stage and its flanking
+   walls/doors. */
 .floor-region {
   fill: #eceef1;
-  stroke: #eceef1;
-  stroke-width: 10;
-  stroke-linejoin: round;
-  fill-rule: evenodd;
   pointer-events: none;
 }
 .floor-label {

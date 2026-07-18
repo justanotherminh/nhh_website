@@ -65,71 +65,7 @@ def _components(cells: set[tuple[int, int]]) -> list[set[tuple[int, int]]]:
     return out
 
 
-def _outline(cells: set[tuple[int, int]]) -> str:
-    """Trace one block's silhouette.
-
-    Walks the cell borders that have no neighbour on the far side; interior
-    borders cancel out, so what remains is the outline. A block with a hole
-    yields several subpaths, which fill-rule: evenodd renders correctly.
-    """
-    edges: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    for cx, cy in cells:
-        x0, y0 = cx * CELL, cy * CELL
-        x1, y1 = x0 + CELL, y0 + CELL
-        # Clockwise, so each piece traces in a consistent direction.
-        if (cx, cy - 1) not in cells: edges.setdefault((x0, y0), []).append((x1, y0))
-        if (cx + 1, cy) not in cells: edges.setdefault((x1, y0), []).append((x1, y1))
-        if (cx, cy + 1) not in cells: edges.setdefault((x1, y1), []).append((x0, y1))
-        if (cx - 1, cy) not in cells: edges.setdefault((x0, y1), []).append((x0, y0))
-
-    paths = []
-    while edges:
-        start = next(iter(edges))
-        pts, cur = [start], start
-        while True:
-            nxts = edges.get(cur)
-            if not nxts:
-                break
-            nxt = nxts.pop()
-            if not nxts:
-                del edges[cur]
-            pts.append(nxt)
-            cur = nxt
-            if cur == start:
-                break
-        # Drop collinear midpoints so the path is a clean rectilinear outline.
-        keep = [
-            p for i, p in enumerate(pts)
-            if not (0 < i < len(pts) - 1
-                    and (p[0] - pts[i - 1][0]) * (pts[i + 1][1] - p[1])
-                    == (p[1] - pts[i - 1][1]) * (pts[i + 1][0] - p[0]))
-        ]
-        if len(keep) >= 4:
-            paths.append("M" + " L".join(f"{x},{y}" for x, y in keep) + " Z")
-    return " ".join(paths)
-
-
 LABEL_CELLS = 3    # cells a "Tầng N" label needs at its rendered size
-
-
-def _widen_band(blob: set[tuple[int, int]], hall_cx: float) -> set[tuple[int, int]]:
-    """Widen a block's top band so the floor name fits inside it.
-
-    The side strips are only a seat or two wide — narrower than their own label.
-    Widening happens away from the middle of the hall, into the empty margin, so
-    it can never run into a neighbouring floor's panel.
-    """
-    top = min(y for _, y in blob)
-    xs = [x for x, y in blob if y == top]
-    lo, hi = min(xs), max(xs)
-    need = LABEL_CELLS - (hi - lo + 1)
-    if need <= 0:
-        return blob
-    if (lo + hi) / 2 < hall_cx:
-        lo -= need
-    else:
-        hi += need
-    return blob | {(x, top) for x in range(lo, hi + 1)}
 
 
 def _rect(ref: str) -> dict:
@@ -202,38 +138,83 @@ def build_seatmap(db: Session) -> dict:
 
     stage = {**_rect(STAGE[0]), "label": STAGE[1]}
 
-    # Floor blocks: a shaded panel behind each floor's seats, named in place. The
-    # floors interleave in plan view, so a bounding box per floor would just nest
-    # them — the shape is traced from the seats instead.
+    # Floor blocks: a shaded rectangle behind each floor's seats, named in place.
+    # Boxed per seating block rather than per floor — the floors interleave in
+    # plan view, so one box per floor would just nest them.
     cells_by_floor: dict[str, set[tuple[int, int]]] = {}
     for s in seats:
         cells_by_floor.setdefault(s.section, set()).add((int(s.svg_x), int(s.svg_y)))
 
     hall_cx = (min(int(s.svg_x) for s in seats) + max(int(s.svg_x) for s in seats)) / 2
 
-    floor_regions = []
+    boxes = []
     for floor, cells in sorted(cells_by_floor.items()):
-        # Extend one row upward to open a clear band for the floor name — the panel
-        # otherwise hugs the seats with nowhere free to put text. Only upward:
-        # padding sideways too would close the narrow gaps between the side strips
-        # and merge neighbouring floors into one grey mass.
-        closed = _close(cells)
-        panel = closed | {(x, y - 1) for (x, y) in closed}
-        for blob in _components(panel):
-            blob = _widen_band(blob, hall_cx)
-            top = min(y for _, y in blob)
-            top_xs = [x for x, y in blob if y == top]
-            floor_regions.append({
-                "floor": floor,
-                "d": _outline(blob),
-                "cx": (min(top_xs) * CELL + max(top_xs) * CELL + CELL) / 2,
-                "cy": top * CELL + CELL / 2,
-            })
+        for blob in _components(_close(cells)):
+            cxs = [x for x, _ in blob]
+            cys = [y for _, y in blob]
+            # One row of headroom on top to sit the floor name in.
+            boxes.append({"floor": floor, "c0": min(cxs), "r0": min(cys) - 1,
+                          "c1": max(cxs), "r1": max(cys)})
 
-    # viewBox bounds across seats + stage + architecture + floor labels.
+    # The stalls box takes in the stage and the walls/doors flanking it, which
+    # otherwise hang outside the box. It's the block sitting closest above the
+    # stage and overlapping it horizontally.
+    sc0, sr0, sc1, sr1 = range_boundaries(STAGE[0])
+    above = [b for b in boxes if b["c0"] <= sc1 and b["c1"] >= sc0 and b["r1"] < sr0]
+    if above:
+        stalls = max(above, key=lambda b: b["r1"])
+        # Architecture counts as the stalls' own if it sits within a few cells of
+        # the block's sides and between its top row and the foot of the stage.
+        lo, hi = stalls["c0"] - 3, stalls["c1"] + 3
+        stalls["c1"], stalls["r1"] = max(stalls["c1"], sc1), max(stalls["r1"], sr1)
+        stalls["c0"] = min(stalls["c0"], sc0)
+        for ref in DOORS + WALLS + COLUMNS:
+            a0, b0, a1, b1 = range_boundaries(ref)
+            if lo <= a0 and a1 <= hi and b0 >= stalls["r0"] and b1 <= sr1:
+                stalls["c0"] = min(stalls["c0"], a0)
+                stalls["c1"] = max(stalls["c1"], a1)
+                stalls["r1"] = max(stalls["r1"], b1)
+
+    # The rear blocks sit right under a row of doors and a wall, which would land
+    # in the header band on top of the floor name. Lift the band clear of them.
+    arch_ranges = [range_boundaries(ref) for ref in DOORS + WALLS + COLUMNS]
+    for b in boxes:
+        for _ in range(4):
+            clash = any(
+                a0 <= b["c1"] and a1 >= b["c0"] and b0 <= b["r0"] <= b1
+                for a0, b0, a1, b1 in arch_ranges
+            )
+            if not clash:
+                break
+            b["r0"] -= 1
+
+    # Narrow side strips are thinner than their own label — widen them away from
+    # the middle of the hall, into the empty margin, so the name fits inside.
+    for b in boxes:
+        need = LABEL_CELLS - (b["c1"] - b["c0"] + 1)
+        if need > 0:
+            if (b["c0"] + b["c1"]) / 2 < hall_cx:
+                b["c0"] -= need
+            else:
+                b["c1"] += need
+
+    floor_regions = [
+        {
+            "floor": b["floor"],
+            "x": b["c0"] * CELL,
+            "y": b["r0"] * CELL,
+            "w": (b["c1"] - b["c0"] + 1) * CELL,
+            "h": (b["r1"] - b["r0"] + 1) * CELL,
+            "cx": (b["c0"] + b["c1"] + 1) * CELL / 2,
+            "cy": b["r0"] * CELL + CELL / 2,
+        }
+        for b in boxes
+    ]
+
+    # viewBox bounds across seats + stage + architecture + floor boxes.
     all_x = xs + [stage["x"], stage["x"] + stage["w"]]
     all_y = ys + [stage["y"], stage["y"] + stage["h"]]
-    for a in architecture:
+    for a in architecture + floor_regions:
         all_x += [a["x"], a["x"] + a["w"]]
         all_y += [a["y"], a["y"] + a["h"]]
     min_x, max_x = min(all_x) - PAD, max(all_x) + PAD + SEAT

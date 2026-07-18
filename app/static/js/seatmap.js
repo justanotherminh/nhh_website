@@ -60,7 +60,7 @@
     // ---- floor blocks ----
     // Drawn first so the shading and its label sit behind the seats.
     (data.floorRegions || []).forEach((r) => {
-      el("path", { d: r.d, class: "floor-region" }, svg);
+      el("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 8, class: "floor-region" }, svg);
       const t = el("text", {
         x: r.cx, y: r.cy, class: "floor-label",
         "text-anchor": "middle", "dominant-baseline": "central",
