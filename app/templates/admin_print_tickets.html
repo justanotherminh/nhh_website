@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}In vé mời — {{ app_name }}{% endblock %}
+{% block body_class %}printsheet{% endblock %}
+{% block main_class %}print-main{% endblock %}
+{% block content %}
+<div class="print-toolbar">
+  <p><strong>{{ cards|length }}</strong> vé mời. Nhấn “In” rồi chọn máy in hoặc “Lưu thành PDF”.</p>
+  <button type="button" class="btn" onclick="window.print()">In / Lưu PDF</button>
+  <a href="/admin/invitations" class="btn btn-secondary">← Quay lại</a>
+</div>
+
+<div class="ticket-sheet">
+  {% for c in cards %}
+  <article class="print-ticket">
+    <div class="print-ticket__info">
+      <p class="print-ticket__event">Sông Trời · Nắng Hoàng Hôn</p>
+      <p class="print-ticket__seat">{{ c.seat }}</p>
+      <p class="print-ticket__invite">Kính mời: <span class="write-line"></span></p>
+      <p class="print-ticket__code">{{ c.code }}</p>
+    </div>
+    <img class="print-ticket__qr" src="{{ c.qr }}" alt="QR" width="132" height="132">
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -94,15 +94,20 @@ def create_comp_order(
     *,
     seat_ids: list[int],
     guest_name: str,
-    email: str,
+    email: str = "",
     phone: str = "",
+    send_email: bool = True,
 ) -> Order:
     """Issue a free invitation (``comp``) order for the given seats.
 
     Unlike a sale, there's no cart, no payment and no pending state: the seats are
-    booked immediately, the same QR ``Ticket`` rows a buyer gets are minted, and the
-    e-ticket is emailed. All-or-nothing — if any seat isn't bookable (already sold,
-    or unknown), nothing changes and ``SeatsNotBookable`` is raised.
+    booked immediately and the same QR ``Ticket`` rows a buyer gets are minted.
+    All-or-nothing — if any seat isn't bookable (already sold, or unknown), nothing
+    changes and ``SeatsNotBookable`` is raised.
+
+    The e-ticket is emailed only when ``send_email`` is set and an ``email`` is
+    given — pre-generated tickets for printout (no address on file) pass
+    ``send_email=False``.
 
     Seats may come from the invitation pool (``status='blocked'``) or be otherwise
     available; a seat that's already ``booked`` is never taken.
@@ -149,14 +154,35 @@ def create_comp_order(
     db.refresh(order)
 
     # Same delivery path as a paid order; failure must not undo the booking.
-    try:
-        from app.services import tickets as ticket_svc
+    if send_email and order.email:
+        try:
+            from app.services import tickets as ticket_svc
 
-        ticket_svc.send_ticket_email(db, order.order_code)
-    except Exception:
-        log.exception("Failed to email invitation e-tickets for order %s", order.order_code)
+            ticket_svc.send_ticket_email(db, order.order_code)
+        except Exception:
+            log.exception("Failed to email invitation e-tickets for order %s", order.order_code)
 
     return order
+
+
+def generate_reserved_tickets(db: Session, holder: str = "Vé mời (in sẵn)") -> int:
+    """Mint printable QR tickets for every reserved (blocked) seat, no email.
+
+    For old-school guests without an address on file: books each blocked seat into a
+    single comp order and mints its ``Ticket`` (scannable at the door), so the seats
+    can be printed and handed out. Idempotent — a seat already booked/ticketed is
+    skipped, so re-running only covers newly-reserved seats. Returns how many were
+    generated.
+    """
+    blocked = db.execute(
+        select(Seat.id).where(Seat.status == "blocked").order_by(Seat.id)
+    ).scalars().all()
+    if not blocked:
+        return 0
+    create_comp_order(
+        db, seat_ids=list(blocked), guest_name=holder, email="", send_email=False,
+    )
+    return len(blocked)
 
 
 def get_order(db: Session, order_code: int) -> Order | None:

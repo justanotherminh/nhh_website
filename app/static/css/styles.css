@@ -354,6 +354,30 @@ body.checkin--invalid { background: #b02020; }
 .checkin-meta dt { opacity: .8; margin: 0; }
 .checkin-meta dd { margin: 0; font-weight: 600; text-align: right; }
 
+/* ---- printable invitation tickets ---- */
+.print-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+.print-toolbar p { margin: 0; }
+.ticket-sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.print-ticket {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid #c8ccd2; border-radius: 10px; padding: 14px 16px;
+  break-inside: avoid; background: #fff;
+}
+.print-ticket__event { margin: 0 0 6px; font-size: .72rem; letter-spacing: 1px; text-transform: uppercase; color: #6b7280; }
+.print-ticket__seat { margin: 0 0 10px; font-size: 1.15rem; font-weight: 700; }
+.print-ticket__invite { margin: 0 0 8px; font-size: .9rem; }
+.print-ticket__invite .write-line { display: inline-block; min-width: 150px; border-bottom: 1px solid #333; }
+.print-ticket__code { margin: 0; font-size: .72rem; color: #9aa0a8; letter-spacing: .5px; }
+.print-ticket__qr { flex: 0 0 auto; width: 132px; height: 132px; }
+
+@media print {
+  body.printsheet .site-header, body.printsheet .site-footer, .print-toolbar { display: none !important; }
+  body.printsheet { background: #fff; }
+  .print-main { padding: 0; max-width: none; }
+  .ticket-sheet { gap: 0; }
+  .print-ticket { border-radius: 0; border-color: #999; }
+}
+
 /* ---- admin dashboard ---- */
 .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .inline { display: inline; margin: 0; }

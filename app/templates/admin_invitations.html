@@ -5,7 +5,10 @@
 <section class="admin">
   <div class="admin-head">
     <h1>Vé mời</h1>
-    <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+    <div class="admin-actions">
+      <a href="/admin/invitations/print" class="btn small-btn" target="_blank">In vé mời</a>
+      <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+    </div>
   </div>
 
   {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
@@ -46,6 +49,14 @@
   {% else %}
   <p class="muted">Chưa có ghế nào được giữ cho vé mời. Thêm ghế vào danh sách bên dưới trước khi phát vé.</p>
   {% endif %}
+
+  <h2>Vé mời in sẵn (không cần email)</h2>
+  <p class="muted small">Tạo sẵn mã QR cho tất cả ghế đang giữ ({{ pool|length }} ghế) để in và phát tận tay khách. Mỗi vé có dòng “Kính mời: ___” để ghi tên. Ghế sẽ chuyển sang trạng thái đã phát.</p>
+  <form method="post" action="/admin/invitations/generate" class="invite-form"
+        onsubmit="return confirm('Tạo vé mời in sẵn cho {{ pool|length }} ghế đang giữ?');">
+    <button type="submit" class="btn">Tạo vé mời in sẵn</button>
+    <a href="/admin/invitations/print" class="btn btn-secondary" target="_blank">Xem/In vé mời</a>
+  </form>
 
   <h2>Giữ thêm ghế cho vé mời</h2>
   <p class="muted small">Mỗi dòng một ghế: nhập mã ghế (id) hoặc nhãn ghế đầy đủ. Chỉ những ghế đang trống mới được giữ.</p>

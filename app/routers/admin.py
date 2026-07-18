@@ -6,6 +6,7 @@ Caddy's HTTPS the Basic Auth password is the gate — keep it strong.
 """
 from __future__ import annotations
 
+import base64
 import secrets
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -16,8 +17,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.db import get_db
-from app.models import Order, OrderItem, PriceTier, Seat
+from app.models import Order, OrderItem, PriceTier, Seat, Ticket
 from app.services import orders as orders_svc
+from app.services import tickets as tickets_svc
 from app.templates import templates
 
 _basic = HTTPBasic()
@@ -240,6 +242,44 @@ def unblock_pool_seat(seat_id: int, db: Session = Depends(get_db)):
     )
     db.commit()
     return RedirectResponse("/admin/invitations", status_code=303)
+
+
+@router.post("/invitations/generate")
+def generate_printed_tickets(db: Session = Depends(get_db)):
+    """Pre-mint QR tickets for all reserved (blocked) seats, for printout (no email)."""
+    n = orders_svc.generate_reserved_tickets(db)
+    return RedirectResponse(
+        f"/admin/invitations?notice=Đã+tạo+{n}+vé+mời+in+sẵn.", status_code=303
+    )
+
+
+@router.get("/invitations/print", response_class=HTMLResponse)
+def print_tickets(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Print-ready sheet of every invitation ticket: seat + a write-on name line + QR.
+
+    QR images are embedded as data URIs so the page is self-contained and prints
+    reliably (no 145 separate image requests)."""
+    rows = db.execute(
+        select(Ticket)
+        .join(Order, Ticket.order_id == Order.id)
+        .options(selectinload(Ticket.seat))
+        .where(Order.kind == "comp")
+        .order_by(Ticket.seat_id)
+    ).scalars().all()
+    cards = [
+        {
+            "seat": t.seat.label,
+            "code": t.ticket_code,
+            "qr": "data:image/png;base64,"
+            + base64.b64encode(tickets_svc.qr_png_bytes(t.qr_token)).decode(),
+        }
+        for t in rows
+    ]
+    return templates.TemplateResponse(
+        request,
+        "admin_print_tickets.html",
+        {"app_name": settings.app_name, "cards": cards},
+    )
 
 
 def _resolve_seat_ids(db: Session, tokens: list[str]) -> tuple[set[int], list[str]]:
