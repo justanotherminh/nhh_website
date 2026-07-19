@@ -13,7 +13,7 @@ from app.db import SessionLocal, engine
 from app.routers import (
     admin, checkin, checkout, pages, seatmap, seats, ticket_view, webhook,
 )
-from app.services import orders
+from app.services import announcements, orders
 
 log = logging.getLogger("scheduler")
 
@@ -29,6 +29,21 @@ def _sweep_stale_orders() -> None:
         db.close()
 
 
+def _drain_announcements() -> None:
+    """Periodic job: send the next few queued announcement emails.
+
+    Draining a batch at a time rather than all at once keeps us inside the mail
+    provider's rate limits and means a restart resumes rather than restarts.
+    """
+    db = SessionLocal()
+    try:
+        announcements.send_batch(db)
+    except Exception:
+        log.exception("announcement drain failed")
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler(timezone="UTC")
@@ -40,8 +55,16 @@ async def lifespan(app: FastAPI):
         coalesce=True,
         max_instances=1,
     )
+    scheduler.add_job(
+        _drain_announcements,
+        "interval",
+        seconds=30,
+        id="drain_announcements",
+        coalesce=True,
+        max_instances=1,   # never two senders on the same queue
+    )
     scheduler.start()
-    log.info("Started stale-order sweeper (every 60s)")
+    log.info("Started stale-order sweeper (60s) and announcement sender (30s)")
     try:
         yield
     finally:

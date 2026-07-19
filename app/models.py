@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -135,3 +136,58 @@ class Ticket(Base):
 
     order: Mapped[Order] = relationship(back_populates="tickets")
     seat: Mapped[Seat] = relationship()
+
+
+class Announcement(Base):
+    """A bulk email composed in the admin UI and sent to ticket holders.
+
+    Recipients are snapshotted into ``AnnouncementRecipient`` rows the moment the
+    announcement is queued, so the audience can't shift underneath a send that's
+    already in flight, and so a crash mid-blast can resume without re-mailing
+    anyone who already received it.
+    """
+    __tablename__ = "announcements"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    subject: Mapped[str] = mapped_column(String(300), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    # draft -> sending -> sent (or paused, if a manager stops it part-way)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    recipients: Mapped[list[AnnouncementRecipient]] = relationship(
+        back_populates="announcement",
+        cascade="all, delete-orphan",
+    )
+
+
+class AnnouncementRecipient(Base):
+    """One addressee of one announcement, and whether their copy went out.
+
+    The (announcement_id, email) unique constraint is what makes double-sending
+    impossible even if a send is triggered twice concurrently.
+    """
+    __tablename__ = "announcement_recipients"
+    __table_args__ = (
+        UniqueConstraint("announcement_id", "email", name="uq_announcement_email"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    announcement_id: Mapped[int] = mapped_column(
+        ForeignKey("announcements.id", ondelete="CASCADE"), nullable=False
+    )
+    email: Mapped[str] = mapped_column(String(200), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    # pending -> sent | failed
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    sent_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    announcement: Mapped[Announcement] = relationship(back_populates="recipients")

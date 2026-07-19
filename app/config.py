@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     smtp_from: str = "NHH 2026 <noreply@nhh.local>"
     smtp_use_tls: bool = False  # True for real SMTP (e.g. Gmail); False for Mailpit
 
+    # Bulk announcements: how many to send per sweep of the background job (which
+    # runs every 30s). Kept low deliberately — mail providers throttle or block
+    # senders who blast, and a paid Gmail account allows ~2000 messages a day.
+    announcement_batch_size: int = 15
+
     # (Early-bird discount is now managed at runtime from the admin UI — stored in
     #  the app_settings table, see app/services/pricing.py.)
 
