@@ -40,9 +40,9 @@ def _find_xlsx() -> Path:
 # source colors (blue/peach/green) only *detect* which tier a cell belongs to. The
 # UI colour is NOT stored — it's derived from price rank in the front-end palette.
 TIERS = {
-    "FFD0F0FF": ("sông trời", 700_000),
-    "FFF7D6C8": ("dòng chảy", 500_000),
-    "FFE2F5ED": ("mạch nguồn", 300_000),
+    "FFD0F0FF": ("Sông Trời", 700_000),
+    "FFF7D6C8": ("Dòng Chảy", 500_000),
+    "FFE2F5ED": ("Mạch Nguồn", 300_000),
 }
 
 # Center aisle / row-label column, and key wing columns (by spreadsheet letter).
