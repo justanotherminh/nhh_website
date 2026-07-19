@@ -22,6 +22,18 @@ body {
 }
 .brand { font-weight: 700; font-size: 1.2rem; color: var(--ink); text-decoration: none; }
 .site-header nav a { color: var(--accent); text-decoration: none; font-weight: 600; }
+/* Social icon: inherits the header colour so it works on both the light header
+   and the transparent one over the home hero. */
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  padding: .25rem;
+  border-radius: 999px;
+  opacity: .85;
+  transition: opacity .15s ease, transform .12s ease;
+}
+.social-link:hover { opacity: 1; transform: translateY(-1px); }
+.social-link svg { display: block; }
 .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
 .container.wide { max-width: 1700px; }
 .hero h1 { font-size: 2rem; margin-bottom: .25rem; }
@@ -69,8 +81,14 @@ body.home .site-header {
   position: absolute; top: 0; left: 0; right: 0; z-index: 3;
   background: transparent; border-bottom: 0;
 }
-body.home .site-header .brand { color: #f3ece0; }
+/* Light-on-image: the hero's top corners can be very pale, so both the wordmark
+   and the icon carry a soft shadow to stay legible whatever the photo does. */
+body.home .site-header .brand {
+  color: #f3ece0;
+  text-shadow: 0 1px 8px rgba(8, 20, 45, .6);
+}
 body.home .site-header nav a { color: #f3ece0; }
+body.home .social-link { filter: drop-shadow(0 1px 4px rgba(8, 20, 45, .7)); }
 
 .home-hero {
   position: relative;
@@ -147,6 +165,142 @@ body.home .site-header nav a { color: #f3ece0; }
   .home-hero__featured { display: none; }
 }
 
+/* ---- home content sections ---- */
+/* One long scroll: sections are told apart by alternating background bands
+   rather than rules or borders. scroll-margin keeps a heading clear of the
+   sticky nav when an anchor lands on it. */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+.section { background: #fff; padding: 4.5rem 1.5rem 5rem; scroll-margin-top: 3.6rem; }
+.section--tint { background: var(--bg); }
+.section__inner { max-width: 46rem; margin: 0 auto; }
+.section__title { font-size: 1.9rem; margin: 0 0 1.5rem; }
+.section p { margin: 0 0 1.15rem; font-size: 1.06rem; color: #3a4353; }
+.section p:last-child { margin-bottom: 0; }
+
+.section__subtitle {
+  font-size: 1.15rem;
+  margin: 2.6rem 0 .9rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid rgba(24, 48, 86, .12);
+}
+
+/* Running order: numeral above the chapter name. */
+.chapters { list-style: none; margin: 0; padding: 0; }
+.chapters li {
+  padding: .85rem 0;
+  border-bottom: 1px solid rgba(24, 48, 86, .10);
+}
+.chapters li:first-child { border-top: 1px solid rgba(24, 48, 86, .10); }
+.chapters__num {
+  display: block;
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #8b97a5;
+}
+.chapters__name {
+  display: block;
+  margin-top: .15rem;
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Cast: name + role. Rows wrap to two lines on narrow screens rather than
+   squashing into columns, which is what a table would do here. */
+.cast { margin: 0; }
+.cast > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .1rem .7rem;
+  padding: .42rem 0;
+  border-bottom: 1px solid rgba(24, 48, 86, .07);
+}
+.cast dt { font-weight: 600; color: var(--ink); }
+.cast dd { margin: 0; color: var(--muted); font-size: .95rem; }
+
+/* Quoted verse inside a section. */
+.pull-quote {
+  margin: 1.6rem 0;
+  padding: .2rem 0 .2rem 1.4rem;
+  border-left: 3px solid #bcd3e8;
+}
+.pull-quote p {
+  font-size: 1.12rem;
+  font-style: italic;
+  color: #2c3a4d;
+  margin: 0;
+}
+
+/* Section nav: sits after the hero in the markup, so `sticky` pins it to the top
+   only once the hero has scrolled past — no JS, no scroll listener. */
+.section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: .55rem 1.5rem;
+  background: rgba(255, 255, 255, .82);
+  border-bottom: 1px solid rgba(24, 48, 86, .10);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+          backdrop-filter: blur(16px) saturate(160%);
+}
+/* Bar spans the window, but its links line up with the text column. */
+.section-nav__inner {
+  max-width: 46rem;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem;
+}
+.section-nav a {
+  padding: .35rem .8rem;
+  border-radius: 999px;
+  color: #3a4353;
+  text-decoration: none;
+  font-size: .95rem;
+  font-weight: 600;
+}
+.section-nav a:hover { background: rgba(24, 48, 86, .07); color: var(--ink); }
+.section-nav__cta {
+  margin-left: auto;
+  background: rgba(31, 111, 196, .9);
+  color: #fff !important;
+}
+.section-nav__cta:hover { background: rgba(31, 111, 196, 1) !important; }
+
+/* Hero scroll cue: a chevron at the foot of the hero. */
+.home-hero__scroll {
+  position: absolute;
+  left: 50%;
+  bottom: 1.6rem;
+  z-index: 2;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  border-right: 2px solid rgba(243, 236, 224, .85);
+  border-bottom: 2px solid rgba(243, 236, 224, .85);
+  transform: rotate(45deg);
+  animation: hero-cue 2.2s ease-in-out infinite;
+}
+@keyframes hero-cue {
+  0%, 100% { transform: rotate(45deg) translate(0, 0); opacity: .75; }
+  50%      { transform: rotate(45deg) translate(5px, 5px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .home-hero__scroll { animation: none; } }
+
+@media (max-width: 760px) {
+  .section { padding: 3rem 1.25rem 3.5rem; }
+  .section__title { font-size: 1.55rem; }
+  .section-nav { padding: .5rem .75rem; }
+  .section-nav__inner { gap: .15rem; }
+  .section-nav a { padding: .3rem .55rem; font-size: .88rem; }
+}
+
 /* ---- ticket / seat map ---- */
 /* Soft cool backdrop so the frosted-glass panels have something to blur over. */
 body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
@@ -219,9 +373,9 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
    priciest/darkest), assigned in the front-end — no colour is stored in the DB.
    To recolour tiers, edit these three pairs. Numbers flip to white on the
    darker fills for legibility. */
-.seat-g.tier-r0 .seat { fill: #7fd0c8; stroke: #4ea79e; }   /* mạch nguồn — 300k */
-.seat-g.tier-r1 .seat { fill: #2f80c8; stroke: #215f96; }   /* dòng chảy  — 500k */
-.seat-g.tier-r2 .seat { fill: #1b3a6b; stroke: #12305c; }   /* sông trời  — 700k */
+.seat-g.tier-r0 .seat { fill: #7fd0c8; stroke: #4ea79e; }   /* Mạch Nguồn — 300k */
+.seat-g.tier-r1 .seat { fill: #2f80c8; stroke: #215f96; }   /* Dòng Chảy  — 500k */
+.seat-g.tier-r2 .seat { fill: #1b3a6b; stroke: #12305c; }   /* Sông Trời  — 700k */
 .seat-g.tier-r0 .seat-num { fill: #14322e; }
 .seat-g.tier-r1 .seat-num { fill: #ffffff; }
 .seat-g.tier-r2 .seat-num { fill: #ffffff; }
