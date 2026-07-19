@@ -21,8 +21,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.db import get_db
-from app.models import Order, OrderItem, PriceTier, Seat, Ticket
+from app.models import Announcement, Order, OrderItem, PriceTier, Seat, Ticket
 from app.routers.seatmap import build_seatmap
+from app.services import announcements as announce_svc
 from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
@@ -322,4 +323,126 @@ def print_tickets(
         request,
         "admin_print_tickets.html",
         {"app_name": settings.app_name, "cards": cards},
+    )
+
+
+# -------------------------------------------------------------- announcements
+# Bulk email to ticket holders. The compose form only queues the send; the actual
+# delivery is drained by the background job in app/main.py, a batch at a time.
+@router.get("/announcements", response_class=HTMLResponse)
+def announcements_page(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    past = db.execute(
+        select(Announcement).order_by(Announcement.id.desc()).limit(20)
+    ).scalars().all()
+    history = [
+        {
+            "id": a.id,
+            "subject": a.subject,
+            "status": a.status,
+            "created": a.created_at.astimezone(_HANOI).strftime("%d/%m/%Y %H:%M"),
+            **announce_svc.progress(db, a.id),
+        }
+        for a in past
+    ]
+    return templates.TemplateResponse(
+        request,
+        "admin_announcements.html",
+        {
+            "app_name": settings.app_name,
+            "recipient_count": announce_svc.audience_count(db),
+            "history": history,
+            "notice": request.query_params.get("notice"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.post("/announcements/preview")
+def announcements_preview(
+    subject: str = Form(""),
+    body: str = Form(""),
+    to: str = Form(""),
+) -> RedirectResponse:
+    """Send one copy to a single address. No announcement record is created."""
+    if not subject.strip() or not body.strip():
+        return RedirectResponse(
+            "/admin/announcements?error=Cần+cả+tiêu+đề+và+nội+dung.", status_code=303
+        )
+    if "@" not in to:
+        return RedirectResponse(
+            "/admin/announcements?error=Địa+chỉ+gửi+thử+không+hợp+lệ.", status_code=303
+        )
+    try:
+        announce_svc.send_preview(subject, body, to.strip())
+    except Exception as exc:                      # noqa: BLE001 - shown to the admin
+        return RedirectResponse(
+            f"/admin/announcements?error=Gửi+thử+thất+bại:+{str(exc)[:120]}",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/admin/announcements?notice=Đã+gửi+thử+tới+{to.strip()}.", status_code=303
+    )
+
+
+@router.post("/announcements/send")
+def announcements_send(
+    subject: str = Form(""),
+    body: str = Form(""),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Queue an announcement to every paid buyer.
+
+    Requires the typed recipient count as confirmation: it forces whoever clicks
+    to have looked at how many people this reaches.
+    """
+    if not subject.strip() or not body.strip():
+        return RedirectResponse(
+            "/admin/announcements?error=Cần+cả+tiêu+đề+và+nội+dung.", status_code=303
+        )
+    total = announce_svc.audience_count(db)
+    if not total:
+        return RedirectResponse(
+            "/admin/announcements?error=Chưa+có+người+nhận+nào.", status_code=303
+        )
+    if confirm.strip() != str(total):
+        return RedirectResponse(
+            f"/admin/announcements?error=Nhập+đúng+số+{total}+để+xác+nhận+gửi.",
+            status_code=303,
+        )
+    if db.execute(
+        select(func.count()).select_from(Announcement)
+        .where(Announcement.status == "sending")
+    ).scalar_one():
+        return RedirectResponse(
+            "/admin/announcements?error=Đang+có+một+thông+báo+được+gửi.+Vui+lòng+đợi.",
+            status_code=303,
+        )
+    ann = announce_svc.queue(db, subject, body)
+    return RedirectResponse(
+        f"/admin/announcements?notice=Đã+xếp+hàng+gửi+tới+{total}+người+nhận"
+        f"+(thông+báo+%23{ann.id}).",
+        status_code=303,
+    )
+
+
+@router.post("/announcements/{announcement_id}/pause")
+def announcements_pause(
+    announcement_id: int, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    """Stop an in-flight blast. Already-sent copies cannot be recalled, but the
+    remaining recipients stay pending and can be resumed."""
+    announce_svc.set_status(db, announcement_id, "paused")
+    return RedirectResponse(
+        "/admin/announcements?notice=Đã+tạm+dừng.", status_code=303
+    )
+
+
+@router.post("/announcements/{announcement_id}/resume")
+def announcements_resume(
+    announcement_id: int, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    announce_svc.set_status(db, announcement_id, "sending")
+    return RedirectResponse(
+        "/admin/announcements?notice=Đã+tiếp+tục+gửi.", status_code=303
     )

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Gửi thông báo — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Gửi thông báo</h1>
+    <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+  </div>
+
+  {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
+  {% if error %}<p class="flash flash-err">{{ error }}</p>{% endif %}
+
+  <p class="ann-count">
+    Sẽ gửi tới <strong>{{ recipient_count }}</strong> người đã mua vé thành công.
+    <span class="muted small">(Mỗi địa chỉ nhận một bản, kể cả khi đặt nhiều đơn.
+      Vé mời không nằm trong danh sách này.)</span>
+  </p>
+
+  <form method="post" action="/admin/announcements/send" class="ann-form"
+        onsubmit="return confirm('Gửi thông báo này tới {{ recipient_count }} người nhận? Không thể thu hồi.');">
+    <label>Tiêu đề
+      <input type="text" name="subject" maxlength="300" required
+             placeholder="[NẮNG HOÀNG HÔN 2026] Thông tin về đêm nhạc">
+    </label>
+
+    <label>Nội dung
+      <textarea name="body" rows="14" required
+                placeholder="Nhập nội dung thư. Để trống một dòng để ngắt đoạn."></textarea>
+    </label>
+
+    <p class="muted small">Thư sẽ tự động có lời chào đầu thư, phần ký tên của BTC và
+      thông tin liên hệ — chỉ cần nhập phần nội dung chính. Không dùng mã HTML.</p>
+
+    {# Test send lives inside the same form so it reuses whatever is typed above,
+       via formaction — one less chance of previewing stale text. #}
+    <div class="ann-preview">
+      <label>Gửi thử tới
+        <input type="email" name="to" placeholder="ban@example.com">
+      </label>
+      <button type="submit" class="btn btn-secondary"
+              formaction="/admin/announcements/preview" formnovalidate>Gửi thử</button>
+    </div>
+
+    <div class="ann-send">
+      <label><span>Nhập số <strong>{{ recipient_count }}</strong> để xác nhận</span>
+        <input type="text" name="confirm" inputmode="numeric" autocomplete="off"
+               placeholder="{{ recipient_count }}">
+      </label>
+      <button type="submit" class="btn btn-danger">Gửi tới tất cả</button>
+    </div>
+  </form>
+
+  {% if history %}
+  <h2 class="ann-h2">Đã gửi</h2>
+  <table class="admin-table">
+    <thead>
+      <tr><th>#</th><th>Tiêu đề</th><th>Thời gian</th><th>Tiến độ</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for a in history %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>{{ a.subject }}</td>
+        <td class="nowrap">{{ a.created }}</td>
+        <td>
+          {{ a.sent }}/{{ a.total }} đã gửi
+          {% if a.failed %}<span class="ann-failed">· {{ a.failed }} lỗi</span>{% endif %}
+          <span class="status status-{{ a.status }}">{{ a.status }}</span>
+        </td>
+        <td>
+          {% if a.status == "sending" %}
+          <form method="post" action="/admin/announcements/{{ a.id }}/pause">
+            <button class="link-btn">Tạm dừng</button>
+          </form>
+          {% elif a.status == "paused" %}
+          <form method="post" action="/admin/announcements/{{ a.id }}/resume">
+            <button class="link-btn">Tiếp tục</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">Thư được gửi dần ở chế độ nền (khoảng {{ 15 }} thư mỗi 30 giây)
+    để tránh bị nhà cung cấp email chặn. Tải lại trang để xem tiến độ.</p>
+  {% endif %}
+</section>
+{% endblock %}

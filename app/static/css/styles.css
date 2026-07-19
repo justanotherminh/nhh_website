@@ -712,3 +712,29 @@ body.checkin--invalid { background: #b02020; }
 .invite-fields input { display: block; margin-top: .3rem; padding: .55rem .7rem; border: 1px solid #d8d5cf; border-radius: 6px; font-size: 1rem; font-family: inherit; }
 .invite-fields .btn { margin-top: 0; }
 .invite-textarea { display: block; width: 100%; max-width: 520px; padding: .6rem .7rem; border: 1px solid #d8d5cf; border-radius: 6px; font-family: inherit; font-size: .95rem; margin-bottom: .6rem; }
+
+/* ---- admin: announcements ---- */
+.ann-count { margin: .2rem 0 1.2rem; }
+.ann-form { display: flex; flex-direction: column; gap: .9rem; max-width: 44rem; }
+.ann-form label { display: flex; flex-direction: column; gap: .3rem; font-weight: 600; }
+.ann-form input[type="text"], .ann-form input[type="email"], .ann-form textarea {
+  padding: .5rem .6rem; border: 1px solid #ccd2da; border-radius: 6px;
+  font: inherit; font-weight: 400;
+}
+.ann-form textarea { resize: vertical; line-height: 1.5; }
+.ann-preview, .ann-send {
+  display: flex; align-items: flex-end; gap: .8rem; flex-wrap: wrap;
+  padding: .9rem; border-radius: 8px;
+}
+.ann-preview { background: #f3f5f8; }
+/* Visually distinct from the test send — this is the irreversible one. */
+.ann-send { background: #fdf1f1; border: 1px solid #f0d4d4; }
+.ann-send label { flex: 1 1 16rem; }
+.btn-danger { background: #b02020; color: #fff; border-color: #b02020; }
+.btn-danger:hover { background: #931a1a; }
+.ann-h2 { margin: 2.4rem 0 .6rem; font-size: 1.15rem; }
+.ann-failed { color: #b02020; }
+.status-sending { background: #e6f0fb; color: #1f4e86; }
+.status-paused  { background: #fdf3e2; color: #8a5a12; }
+.status-sent    { background: #e6f4ea; color: #1c6b34; }
+.status-draft   { background: #eef0f3; color: #4b5563; }
