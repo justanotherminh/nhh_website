@@ -2,14 +2,33 @@
 {% block body_class %}home{% endblock %}
 {% block main_class %}home-main{% endblock %}
 {% block content %}
-<section class="home-hero" style="--hero: url('{{ static('img/hero-watercolor.jpg') }}')">
+<section class="home-hero" id="top" style="--hero: url('{{ static('img/hero-watercolor.jpg') }}')">
   <div class="home-hero__overlay" aria-hidden="true"></div>
+
+  {# Brand mark, pinned to the hero's top-left under the header. The artwork is
+     white-only, so it lives here over the photo rather than on any light page. #}
+  <img class="home-hero__logo" src="{{ static('img/logo.png') }}"
+       alt="Nắng Hoàng Hôn" width="443" height="640">
 
   <div class="home-hero__inner">
     <div class="home-hero__copy">
-      <img class="home-hero__title" src="{{ static('img/song-troi.png') }}"
-           alt="Sông Trời" width="1400" height="1214">
-      <p class="home-hero__sub">Đêm nhạc gây quỹ từ thiện — Hà Nội, 2026</p>
+      {# Wordmark and the when/where block. Side by side when there's room,
+         stacked when there isn't — the wrap is driven by the flex basis below. #}
+      <div class="home-hero__lockup">
+        <img class="home-hero__title" src="{{ static('img/song-troi.png') }}"
+             alt="Sông Trời" width="1400" height="1214">
+        <div class="home-hero__meta">
+          <p class="home-hero__when">
+            <time datetime="2026-08-22T20:00">22.08.2026</time>
+            <span>20:00 – 22:00</span>
+          </p>
+          {# Broken at the hall/institution seam so a wrap never splits "Âm nhạc". #}
+          <p class="home-hero__where">
+            <span>PHÒNG HOÀ NHẠC LỚN</span>
+            <span>HỌC VIỆN ÂM NHẠC QUỐC GIA VIỆT NAM</span>
+          </p>
+        </div>
+      </div>
       <a class="home-hero__cta" href="/tickets">Đặt vé</a>
     </div>
 
@@ -37,8 +56,11 @@
    no JS needed. #}
 <nav class="section-nav" aria-label="Nội dung trang">
   <div class="section-nav__inner">
-    <a href="#gioi-thieu">Giới thiệu</a>
-    <a href="#loi-ngo">Lời ngỏ</a>
+    {# The name lives here, not in the page header — up there the logo already
+       carries it. Scrolls back to the top. #}
+    <a class="section-nav__brand" href="#top">Nắng Hoàng Hôn Concert</a>
+    <a href="#gioi-thieu">Về chương trình</a>
+    <a href="#loi-ngo">Nắng Hoàng Hôn 2026</a>
     <a href="#chuong-trinh">Chương trình</a>
     <a href="/tickets" class="section-nav__cta">Đặt vé</a>
   </div>
@@ -47,7 +69,7 @@
 {# Intro — the brand link in the header scrolls here. #}
 <section class="section section--tint" id="gioi-thieu">
   <div class="section__inner">
-    <h2 class="section__title">Về Nắng Hoàng Hôn</h2>
+    <h2 class="section__title">Về chương trình Nắng Hoàng Hôn</h2>
 
     <p>Nắng Hoàng Hôn là chuỗi hòa nhạc từ thiện ra đời năm 2024, lấy cảm hứng từ
       cuốn “Hồi ký chạy thận” của tác giả Hồ Hồng Việt, người đã kiên cường chiến
@@ -82,7 +104,7 @@
 {# Foreword to this year's programme. #}
 <section class="section" id="loi-ngo">
   <div class="section__inner">
-    <h2 class="section__title">Lời ngỏ</h2>
+    <h2 class="section__title">Nắng Hoàng Hôn 2026</h2>
 
     <p>Con người sinh ra và lớn lên bên bờ nước. Những dòng sông chảy qua thơ ca
       của Đỗ Phủ, Apollinaire hay Nguyễn Du... chưa bao giờ ngừng trôi trong tâm
@@ -118,6 +140,9 @@
       <li><span class="chapters__num">Chương V</span><span class="chapters__name">TÁI SINH</span></li>
     </ol>
 
+    {# Cast hidden until the line-up is confirmed — restore when it's final.
+       Three entries below still have no role listed (Lương Khánh Nhi,
+       Trần Viết Bảo, Phạm Hồng Ánh), and the heading is a placeholder.
     <h3 class="section__subtitle">Nghệ sĩ biểu diễn</h3>
     <dl class="cast">
       <div><dt>Hoàng Hồ Khánh Vân</dt><dd>Nghệ sĩ Violin</dd></div>
@@ -140,6 +165,7 @@
       <div><dt>Nguyễn Thế Vinh</dt><dd>Nhạc sĩ / arranger</dd></div>
       <div><dt>Trần Tâm Trang</dt><dd>MC</dd></div>
     </dl>
+    #}
   </div>
 </section>
 {% endblock %}

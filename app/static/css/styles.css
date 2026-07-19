@@ -21,6 +21,7 @@ body {
   background: #fff;
 }
 .brand { font-weight: 700; font-size: 1.2rem; color: var(--ink); text-decoration: none; }
+.site-header nav { display: flex; align-items: center; gap: .35rem; }
 .site-header nav a { color: var(--accent); text-decoration: none; font-weight: 600; }
 /* Social icon: inherits the header colour so it works on both the light header
    and the transparent one over the home hero. */
@@ -73,6 +74,14 @@ table.tiers th, table.tiers td { text-align: left; padding: .6rem .8rem; border-
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: .4rem; vertical-align: middle; border: 1px solid rgba(0,0,0,.2); }
 .swatch-booked { background: #b8bfc7; }
 .site-footer { text-align: center; color: var(--muted); padding: 2rem 1rem; font-size: .9rem; }
+/* Contact lines sit side by side when there's room, stack when there isn't. */
+.site-footer__contact {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: .35rem 1.6rem; margin: 0 0 .5rem;
+}
+.site-footer__contact a { color: inherit; text-decoration: none; border-bottom: 1px solid rgba(24,48,86,.22); }
+.site-footer__contact a:hover { color: var(--ink); border-bottom-color: currentColor; }
+.site-footer__legal { margin: 0; font-size: .82rem; opacity: .8; }
 
 /* ---- home landing (full-bleed watercolor hero) ---- */
 body.home .container.home-main { max-width: none; margin: 0; padding: 0; }
@@ -83,10 +92,12 @@ body.home .site-header {
 }
 /* Light-on-image: the hero's top corners can be very pale, so both the wordmark
    and the icon carry a soft shadow to stay legible whatever the photo does. */
-body.home .site-header .brand {
-  color: #f3ece0;
-  text-shadow: 0 1px 8px rgba(8, 20, 45, .6);
-}
+/* On the home page the hero logo already spells out the name, so the header
+   wordmark would say it twice in the same corner. Other pages keep it. */
+body.home .site-header .brand { display: none; }
+/* With the brand gone there's nothing for space-between to push against, so the
+   social icon would slide to the left. Pin the nav to the right explicitly. */
+body.home .site-header nav { margin-left: auto; }
 body.home .site-header nav a { color: #f3ece0; }
 body.home .social-link { filter: drop-shadow(0 1px 4px rgba(8, 20, 45, .7)); }
 
@@ -105,6 +116,12 @@ body.home .social-link { filter: drop-shadow(0 1px 4px rgba(8, 20, 45, .7)); }
     linear-gradient(105deg, rgba(11,28,54,.42), rgba(11,28,54,0) 58%),
     linear-gradient(to bottom, rgba(0,185,240,.22), rgba(0,120,200,0) 55%);
 }
+.home-hero__logo {
+  position: absolute; z-index: 1;
+  top: 3.2rem; left: 2rem;
+  height: 150px; width: auto;
+  filter: drop-shadow(0 2px 12px rgba(8,20,45,.5));
+}
 .home-hero__inner {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: 2rem;
@@ -113,14 +130,32 @@ body.home .social-link { filter: drop-shadow(0 1px 4px rgba(8, 20, 45, .7)); }
   padding: 6rem 2rem 3rem;
 }
 .home-hero__copy { flex: 1 1 480px; }
+/* Wordmark + when/where. Both children carry a flex basis, so the row wraps to a
+   stack the moment the viewport can't seat them side by side — no breakpoint. */
+.home-hero__lockup {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 1.4rem 2.2rem; margin-bottom: 1.9rem;
+}
 .home-hero__title {
+  flex: 1 1 300px;
   display: block; width: 100%; max-width: 460px; height: auto;
   filter: drop-shadow(0 3px 14px rgba(8,20,45,.45));
 }
-.home-hero__sub {
-  color: #efe7d8; font-size: 1.15rem; margin: 1.2rem 0 1.8rem;
-  text-shadow: 0 1px 8px rgba(8,20,45,.55); max-width: 30rem;
+.home-hero__meta {
+  flex: 1 1 240px; max-width: 24rem;
+  color: #efe7d8; text-shadow: 0 1px 8px rgba(8,20,45,.55);
 }
+.home-hero__when {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .8rem;
+  margin: 0 0 .55rem; font-size: 1.45rem; font-weight: 700; letter-spacing: .01em;
+}
+.home-hero__when span { font-size: 1.05rem; font-weight: 500; opacity: .92; }
+.home-hero__where {
+  margin: 0; font-size: .82rem; font-weight: 600;
+  line-height: 1.55; letter-spacing: .05em;
+}
+/* balance keeps the institution line from orphaning "NAM" if it still wraps. */
+.home-hero__where span { display: block; text-wrap: balance; }
 .home-hero__cta {
   display: inline-block; padding: .8rem 2.2rem;
   background: rgba(255, 255, 255, .82); color: #16233a;
@@ -160,7 +195,9 @@ body.home .social-link { filter: drop-shadow(0 1px 4px rgba(8, 20, 45, .7)); }
 
 @media (max-width: 760px) {
   .home-hero { min-height: 100svh; }
-  .home-hero__inner { flex-direction: column; align-items: flex-start; padding: 6rem 1.5rem 3rem; }
+  /* Extra head-room so the pinned logo never lands on the wordmark. */
+  .home-hero__logo { height: 92px; top: 2.9rem; left: 1.5rem; }
+  .home-hero__inner { flex-direction: column; align-items: flex-start; padding: 9.5rem 1.5rem 3rem; }
   .home-hero__title { max-width: 320px; }
   .home-hero__featured { display: none; }
 }
@@ -248,7 +285,9 @@ html { scroll-behavior: smooth; }
   -webkit-backdrop-filter: blur(16px) saturate(160%);
           backdrop-filter: blur(16px) saturate(160%);
 }
-/* Bar spans the window, but its links line up with the text column. */
+/* Bar spans the window, but its links line up with the text column. The wordmark
+   is lifted out of this flow (below) so it can sit hard left without dragging the
+   links off the column. */
 .section-nav__inner {
   max-width: 46rem;
   margin: 0 auto;
@@ -266,6 +305,22 @@ html { scroll-behavior: smooth; }
   font-weight: 600;
 }
 .section-nav a:hover { background: rgba(24, 48, 86, .07); color: var(--ink); }
+/* Pulled out of the centred column and pinned to the bar's left gutter — the same
+   1.5rem the page header uses — so the links keep their alignment with the text.
+   The bar is position:sticky, which is enough to anchor this. */
+.section-nav__brand {
+  position: absolute;
+  left: 1.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding-left: 0 !important;
+  font-weight: 700 !important;
+  color: var(--ink) !important;
+}
+.section-nav__brand:hover { background: none !important; }
+/* Below this the gutter is too narrow to hold the wordmark clear of the centred
+   links, and they would overlap. The hero logo still carries the name. */
+@media (max-width: 1160px) { .section-nav__brand { display: none; } }
 .section-nav__cta {
   margin-left: auto;
   background: rgba(31, 111, 196, .9);
