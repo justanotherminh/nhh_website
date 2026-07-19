@@ -68,11 +68,13 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     ).scalar() or 0
     free_now = available_total - held
 
-    # Orders grouped by status (count + summed amount).
+    # Orders grouped by status (count + summed amount). Throwaway orders from
+    # scripts/send_test_ticket are excluded so they can't inflate revenue.
     order_stats = {
         s: {"count": c, "sum": total}
         for s, c, total in db.execute(
             select(Order.status, func.count(), func.coalesce(func.sum(Order.amount_vnd), 0))
+            .where(Order.kind != "test")
             .group_by(Order.status)
         ).all()
     }

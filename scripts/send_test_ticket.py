@@ -73,7 +73,10 @@ def main(email: str, keep: bool = False, plan: tuple[int, ...] = DEFAULT_PLAN) -
         amount = sum(s.tier.price_vnd for s in seats)
         order = Order(
             order_code=orders_svc._unique_order_code(db),
-            kind="sale",                       # look like a real buyer's ticket
+            # Distinct from "sale" on purpose: a --keep run leaves this row in the
+            # database, and it must never be mistaken for revenue or be mailed an
+            # announcement. The e-ticket still renders on the paid path.
+            kind="test",
             cart_id=None,
             buyer_name="Kiểm tra vé điện tử",
             email=email,
@@ -104,6 +107,9 @@ def main(email: str, keep: bool = False, plan: tuple[int, ...] = DEFAULT_PLAN) -
 
         if keep:
             print(f"Kept throwaway order {code}; its QR links will resolve until you delete it.")
+            print("⚠️  This order stays in the database and holds live tickets on "
+                  "seats that are still on sale.\n"
+                  "    Remove it once you're done: python -m scripts.purge_test_orders --yes")
         else:
             # The seat's status was never changed, so only the throwaway rows go.
             db.execute(delete(Ticket).where(Ticket.order_id == order.id))
