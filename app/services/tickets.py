@@ -15,6 +15,7 @@ import qrcode
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app import i18n
 from app.config import settings
 from app.models import Order, Seat, Ticket
 
@@ -57,29 +58,12 @@ def _load_order_with_tickets(db: Session, order_code: int) -> Order | None:
     ).scalar_one_or_none()
 
 
-EMAIL_SUBJECT = "[NẮNG HOÀNG HÔN 2026] XÁC NHẬN ĐĂNG KÝ VÉ THÀNH CÔNG"
-
 CONTACT_EMAIL = "nanghoanghonconcert@gmail.com"
 CONTACT_HOTLINE = "093 519 6666"
 CONTACT_FACEBOOK = "https://www.facebook.com/nanghoanghonconcert"
 
-# The closing thank-you is about the donation, so it only fits paid orders.
-_THANKS = (
-    "Thay mặt cho các bệnh nhân chạy thận nhân tạo được nhận sự hỗ trợ này, chúng "
-    "tôi xin gửi lời tri ân sâu sắc đến bạn. Hành động tử tế của bạn không chỉ mang "
-    "đến sự hỗ trợ thiết thực cho những mảnh đời đang gặp khó khăn mà còn lan tỏa "
-    "thông điệp ý nghĩa về lòng nhân ái và sự sẻ chia. Mỗi đóng góp, dù là nhỏ bé "
-    "nhất, đều góp phần tạo nên sự khác biệt to lớn, mang đến hy vọng và niềm tin "
-    "cho những người đang phải chiến đấu với căn bệnh hiểm nghèo."
-)
 
-_UPDATE_NOTE = (
-    "BTC sẽ gửi email cập nhật thông tin chi tiết về buổi hòa nhạc trong thời gian "
-    "ngắn tới. Quý khán giả vui lòng chú ý hòm mail."
-)
-
-
-def _seat_lines(order: Order) -> list[str]:
+def _seat_lines(order: Order, lang: str) -> list[str]:
     """One line per tier: quantity, tier name, then each seat's floor/row/number.
 
     Grouped by tier because a buyer picking three seats in one tier should read
@@ -88,119 +72,119 @@ def _seat_lines(order: Order) -> list[str]:
     is_comp = order.kind == "comp"
     groups: dict[str, list[Seat]] = {}
     for t in order.tickets:
-        name = "Vé mời" if is_comp else t.seat.tier.name
+        name = i18n.t("email.comp_group", lang) if is_comp else t.seat.tier.name
         groups.setdefault(name, []).append(t.seat)
+    row_word = i18n.t("seatline.row", lang)
+    seat_word = i18n.t("seatline.seat", lang)
     lines = []
     for name, seats in groups.items():
         where = ", ".join(
-            f"{s.section} Hàng {s.row_label} Ghế {s.seat_number}" for s in seats
+            f"{i18n.floor_name(s.section, lang)} {row_word} {s.row_label} "
+            f"{seat_word} {s.seat_number}"
+            for s in seats
         )
         lines.append(f"{len(seats)} {name} — {where}")
     return lines
 
 
-def _email_html(order: Order) -> str:
+def _email_html(order: Order, lang: str) -> str:
     is_comp = order.kind == "comp"
-    headline = (
-        "BẠN ĐÃ ĐĂNG KÝ VÉ MỜI THÀNH CÔNG!"
-        if is_comp
-        else "BẠN ĐÃ ĐĂNG KÝ ĐẶT VÉ VÀ QUYÊN GÓP THÀNH CÔNG!"
-    )
-    amount_row = (
-        "<tr><td style='padding:3px 0'>Loại vé:</td>"
-        "<td style='padding:3px 0 3px 10px'><strong>Vé mời (miễn phí)</strong></td></tr>"
-        if is_comp
-        else "<tr><td style='padding:3px 0'>Giá vé tương đương giá trị gây quỹ:</td>"
-        f"<td style='padding:3px 0 3px 10px'><strong>{_fmt_vnd(order.amount_vnd)}</strong></td></tr>"
-    )
-    seats_html = "<br>".join(_seat_lines(order))
+    headline = i18n.t("email.headline_comp" if is_comp else "email.headline_sale", lang)
+    if is_comp:
+        amount_row = (
+            f"<tr><td style='padding:3px 0'>{i18n.t('email.ticket_type', lang)}:</td>"
+            f"<td style='padding:3px 0 3px 10px'><strong>{i18n.t('email.comp_free', lang)}</strong></td></tr>"
+        )
+    else:
+        amount_row = (
+            f"<tr><td style='padding:3px 0'>{i18n.t('email.amount_label', lang)}:</td>"
+            f"<td style='padding:3px 0 3px 10px'><strong>{_fmt_vnd(order.amount_vnd)}</strong></td></tr>"
+        )
+    seats_html = "<br>".join(_seat_lines(order, lang))
+    view_label = i18n.t("email.view_ticket", lang)
+    qr_alt = i18n.t("email.qr_alt", lang)
     # One QR per ticket, captioned so a multi-seat buyer knows which is which.
     qrs = "".join(
         f"<div style='display:inline-block;text-align:center;margin:0 14px 14px 0'>"
-        f"<img src='cid:qr-{t.id}' width='150' height='150' alt='Mã QR'"
+        f"<img src='cid:qr-{t.id}' width='150' height='150' alt='{qr_alt}'"
         f" style='display:block;border:1px solid #e6e8ec'>"
-        f"<div style='font-size:12px;color:#6b7280;margin-top:5px'>{t.seat.label}</div>"
+        f"<div style='font-size:12px;color:#6b7280;margin-top:5px'>{i18n.seat_label(t.seat, lang)}</div>"
         f"<div style='font-size:12px'><a href='{ticket_url(t.qr_token)}'"
-        f" style='color:#1f6fc4'>Xem vé</a></div></div>"
+        f" style='color:#1f6fc4'>{view_label}</a></div></div>"
         for t in order.tickets
     )
-    thanks_html = f"<p>{_THANKS}</p>" if not is_comp else ""
+    thanks_html = f"<p>{i18n.t('email.thanks', lang)}</p>" if not is_comp else ""
     return f"""\
 <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#1c2230;
             max-width:620px;line-height:1.6;font-size:15px">
-  <p>Thân gửi Quý khán giả,</p>
+  <p>{i18n.t('email.greeting', lang)}</p>
 
-  <p>Lời đầu tiên, BTC Nắng Hoàng Hôn 2026 xin gửi lời cảm ơn sâu sắc tới quý vị vì
-     đã quan tâm và dành thời gian tham dự Chương trình hoà nhạc từ thiện Nắng Hoàng
-     Hôn 2026 – Sông Trời. Chúng tôi xin trân trọng thông báo:</p>
+  <p>{i18n.t('email.intro', lang)}</p>
 
   <p style="text-align:center;font-weight:700;font-size:17px;
             background:#f2f6fb;border-radius:8px;padding:14px 12px">{headline}</p>
 
-  <p style="font-weight:700;margin-bottom:6px">Thông tin người đăng ký</p>
+  <p style="font-weight:700;margin-bottom:6px">{i18n.t('email.registrant', lang)}</p>
   <table style="border-collapse:collapse;font-size:15px">
-    <tr><td style="padding:3px 0">Họ và tên:</td>
+    <tr><td style="padding:3px 0">{i18n.t('email.name', lang)}:</td>
         <td style="padding:3px 0 3px 10px"><strong>{order.buyer_name}</strong></td></tr>
-    <tr><td style="padding:3px 0;vertical-align:top">Hạng ghế:</td>
+    <tr><td style="padding:3px 0;vertical-align:top">{i18n.t('email.seat_class', lang)}:</td>
         <td style="padding:3px 0 3px 10px"><strong>{seats_html}</strong></td></tr>
     {amount_row}
-    <tr><td style="padding:3px 0">Mã đơn hàng:</td>
+    <tr><td style="padding:3px 0">{i18n.t('email.order_code', lang)}:</td>
         <td style="padding:3px 0 3px 10px"><strong>{order.order_code}</strong></td></tr>
   </table>
 
   <div style="margin:20px 0">{qrs}</div>
 
-  <p>{_UPDATE_NOTE}</p>
+  <p>{i18n.t('email.update_note', lang)}</p>
   {thanks_html}
-  <p>Xin chân thành cảm ơn!</p>
+  <p>{i18n.t('email.closing', lang)}</p>
 
-  <p style="font-weight:700;margin-bottom:4px">BTC NẮNG HOÀNG HÔN 2026</p>
+  <p style="font-weight:700;margin-bottom:4px">{i18n.t('email.signoff', lang)}</p>
   <p style="margin-top:0;color:#4b5563;font-size:14px">
-    Thông tin liên hệ:<br>
+    {i18n.t('email.contact', lang)}<br>
     Email: <a href="mailto:{CONTACT_EMAIL}" style="color:#1f6fc4">{CONTACT_EMAIL}</a><br>
-    Hotline: <a href="tel:+84935196666" style="color:#1f6fc4">{CONTACT_HOTLINE}</a><br>
+    {i18n.t('email.hotline', lang)}: <a href="tel:+84935196666" style="color:#1f6fc4">{CONTACT_HOTLINE}</a><br>
     Facebook: <a href="{CONTACT_FACEBOOK}" style="color:#1f6fc4">Nắng Hoàng Hôn Concert</a>
   </p>
 </div>"""
 
 
-def _email_text(order: Order) -> str:
+def _email_text(order: Order, lang: str) -> str:
     is_comp = order.kind == "comp"
     lines = [
-        "Thân gửi Quý khán giả,",
+        i18n.t("email.greeting", lang),
         "",
-        "Lời đầu tiên, BTC Nắng Hoàng Hôn 2026 xin gửi lời cảm ơn sâu sắc tới quý vị "
-        "vì đã quan tâm và dành thời gian tham dự Chương trình hoà nhạc từ thiện Nắng "
-        "Hoàng Hôn 2026 – Sông Trời. Chúng tôi xin trân trọng thông báo:",
+        i18n.t("email.intro", lang),
         "",
-        "BẠN ĐÃ ĐĂNG KÝ VÉ MỜI THÀNH CÔNG!"
-        if is_comp
-        else "BẠN ĐÃ ĐĂNG KÝ ĐẶT VÉ VÀ QUYÊN GÓP THÀNH CÔNG!",
+        i18n.t("email.headline_comp" if is_comp else "email.headline_sale", lang),
         "",
-        "Thông tin người đăng ký",
-        f"Họ và tên: {order.buyer_name}",
-        "Hạng ghế:",
+        i18n.t("email.registrant", lang),
+        f"{i18n.t('email.name', lang)}: {order.buyer_name}",
+        f"{i18n.t('email.seat_class', lang)}:",
     ]
-    lines += [f"  {line}" for line in _seat_lines(order)]
+    lines += [f"  {line}" for line in _seat_lines(order, lang)]
     lines.append(
-        "Loại vé: Vé mời (miễn phí)"
+        f"{i18n.t('email.ticket_type', lang)}: {i18n.t('email.comp_free', lang)}"
         if is_comp
-        else f"Giá vé tương đương giá trị gây quỹ: {_fmt_vnd(order.amount_vnd)}"
+        else f"{i18n.t('email.amount_label', lang)}: {_fmt_vnd(order.amount_vnd)}"
     )
-    lines += [f"Mã đơn hàng: {order.order_code}", "", "Vé của bạn:"]
+    lines += [f"{i18n.t('email.order_code', lang)}: {order.order_code}", "",
+              i18n.t("email.your_tickets", lang)]
     for t in order.tickets:
-        lines.append(f"  - {t.seat.label}: {ticket_url(t.qr_token)}")
-    lines += ["", _UPDATE_NOTE]
+        lines.append(f"  - {i18n.seat_label(t.seat, lang)}: {ticket_url(t.qr_token)}")
+    lines += ["", i18n.t("email.update_note", lang)]
     if not is_comp:
-        lines += ["", _THANKS]
+        lines += ["", i18n.t("email.thanks", lang)]
     lines += [
         "",
-        "Xin chân thành cảm ơn!",
+        i18n.t("email.closing", lang),
         "",
-        "BTC NẮNG HOÀNG HÔN 2026",
-        "Thông tin liên hệ:",
+        i18n.t("email.signoff", lang),
+        i18n.t("email.contact", lang),
         f"Email: {CONTACT_EMAIL}",
-        f"Hotline: {CONTACT_HOTLINE}",
+        f"{i18n.t('email.hotline', lang)}: {CONTACT_HOTLINE}",
         "Facebook: Nắng Hoàng Hôn Concert",
     ]
     return "\n".join(lines)
@@ -225,12 +209,13 @@ def send_ticket_email(db: Session, order_code: int) -> bool:
     if order is None or not order.tickets:
         return False
 
+    lang = i18n.normalize(order.lang)
     msg = EmailMessage()
-    msg["Subject"] = EMAIL_SUBJECT
+    msg["Subject"] = i18n.t("email.subject", lang)
     msg["From"] = settings.smtp_from
     msg["To"] = order.email
-    msg.set_content(_email_text(order))
-    msg.add_alternative(_email_html(order), subtype="html")
+    msg.set_content(_email_text(order, lang))
+    msg.add_alternative(_email_html(order, lang), subtype="html")
 
     # Attach each QR as a related image the HTML references via cid:.
     html_part = msg.get_payload()[-1]

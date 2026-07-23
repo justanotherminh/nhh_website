@@ -47,6 +47,7 @@ def create_order_from_holds(
     email: str,
     phone: str,
     extend_seconds: int,
+    lang: str = "vi",
 ) -> Order:
     """Create a pending order for exactly the seats this cart currently holds.
 
@@ -78,6 +79,7 @@ def create_order_from_holds(
         buyer_name=buyer_name,
         email=email,
         phone=phone,
+        lang=lang,
         amount_vnd=amount,
         discount_percent=percent,
         status="pending",

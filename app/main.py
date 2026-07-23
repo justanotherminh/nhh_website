@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
+from app import i18n
 from app.config import settings
 from app.db import SessionLocal, engine
 from app.routers import (
@@ -72,6 +73,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def resolve_language(request, call_next):
+    """Expose the request's display language on ``request.state.lang``.
+
+    Read from the ``lang`` cookie (set by ``GET /lang/{code}``) and validated;
+    anything missing or unknown falls back to Vietnamese. Templates and routers
+    read it from here — see ``templates/__init__.py`` and ``app.i18n``.
+    """
+    request.state.lang = i18n.normalize(request.cookies.get("lang"))
+    return await call_next(request)
+
 
 app.mount(
     "/static",

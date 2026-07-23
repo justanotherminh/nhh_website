@@ -5,11 +5,12 @@ can draw the map without knowing anything about the source Excel.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from openpyxl.utils import range_boundaries
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import i18n
 from app.config import settings
 from app.db import get_db
 from app.models import PriceTier, Seat
@@ -80,14 +81,16 @@ def _rect(ref: str) -> dict:
 
 
 @router.get("/seatmap")
-def seatmap(db: Session = Depends(get_db)) -> dict:
-    return build_seatmap(db)
+def seatmap(request: Request, db: Session = Depends(get_db)) -> dict:
+    return build_seatmap(db, lang=getattr(request.state, "lang", i18n.DEFAULT_LANG))
 
 
-def build_seatmap(db: Session) -> dict:
+def build_seatmap(db: Session, lang: str = i18n.DEFAULT_LANG) -> dict:
     """Assemble the hall layout JSON (geometry, tiers, seats, architecture).
 
-    Shared by the public seat-map endpoint and the admin invitation map.
+    Shared by the public seat-map endpoint and the admin invitation map. Labels
+    (seat names, floors, stage/door/wall/column) are emitted in ``lang``; the
+    admin caller keeps the Vietnamese default.
     """
     tiers = db.execute(select(PriceTier).order_by(PriceTier.price_vnd.desc())).scalars().all()
     seats = db.execute(select(Seat)).scalars().all()
@@ -106,10 +109,10 @@ def build_seatmap(db: Session) -> dict:
         seat_dicts.append(
             {
                 "id": s.id,
-                "section": s.section,
+                "section": i18n.floor_name(s.section, lang),
                 "row": s.row_label,
                 "num": s.seat_number,
-                "label": s.label,
+                "label": i18n.seat_label(s, lang),
                 "tier_id": s.tier_id,
                 "x": px,
                 "y": py,
@@ -130,13 +133,13 @@ def build_seatmap(db: Session) -> dict:
 
     architecture = []
     for ref in DOORS:
-        architecture.append({"type": "door", "label": "Cửa", **_rect(ref)})
+        architecture.append({"type": "door", "label": i18n.t("map.door", lang), **_rect(ref)})
     for ref in WALLS:
-        architecture.append({"type": "wall", "label": "Tường", **_rect(ref)})
+        architecture.append({"type": "wall", "label": i18n.t("map.wall", lang), **_rect(ref)})
     for ref in COLUMNS:
-        architecture.append({"type": "column", "label": "Cột", **_rect(ref)})
+        architecture.append({"type": "column", "label": i18n.t("map.column", lang), **_rect(ref)})
 
-    stage = {**_rect(STAGE[0]), "label": STAGE[1]}
+    stage = {**_rect(STAGE[0]), "label": i18n.t("map.stage", lang)}
 
     # Floor blocks: a shaded rectangle behind each floor's seats, named in place.
     # Boxed per seating block rather than per floor — the floors interleave in
@@ -234,7 +237,7 @@ def build_seatmap(db: Session) -> dict:
 
     floor_regions = [
         {
-            "floor": b["floor"],
+            "floor": i18n.floor_name(b["floor"], lang),
             "x": b["c0"] * CELL,
             "y": b["r0"] * CELL,
             "w": (b["c1"] - b["c0"] + 1) * CELL,

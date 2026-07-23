@@ -7,6 +7,18 @@
   const fmtVnd = (n) => n.toLocaleString("vi-VN") + " đ";
   const STATUS_POLL_MS = 10000;
 
+  // Display strings are injected by the page (translated server-side); fall back
+  // to Vietnamese so the map still works if the block is ever missing.
+  const I18N = Object.assign({
+    mapLoadError: "Không tải được sơ đồ chỗ ngồi.",
+    maxSeats: "Bạn chỉ có thể chọn tối đa {n} ghế mỗi lần.",
+    seatTaken: "Ghế này vừa được người khác chọn.",
+    holdFailed: "Không giữ được ghế, vui lòng thử lại.",
+    seatSummary: "{n} ghế — {total}",
+    noneSelected: "Chưa chọn ghế nào.",
+  }, window.I18N || {});
+  const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => (k in vars ? vars[k] : "{" + k + "}"));
+
   async function postJSON(url, body) {
     try {
       const r = await fetch(url, {
@@ -41,7 +53,7 @@
     .then((r) => r.json())
     .then((data) => render(data))
     .catch((err) => {
-      root.innerHTML = "<p class='error'>Không tải được sơ đồ chỗ ngồi.</p>";
+      root.innerHTML = "<p class='error'>" + I18N.mapLoadError + "</p>";
       console.error(err);
     });
 
@@ -135,16 +147,16 @@
           updatePanel();
         } else {
           if (selected.size >= data.maxPerOrder) {
-            alert("Bạn chỉ có thể chọn tối đa " + data.maxPerOrder + " ghế mỗi lần.");
+            alert(fill(I18N.maxSeats, { n: data.maxPerOrder }));
             return;
           }
           const res = await postJSON("/api/hold", { seat_id: seat.id });
           if (!res.ok) {
             if (res.status === 409) {
               setTaken(entry, true);
-              alert((res.data && res.data.detail) || "Ghế này vừa được người khác chọn.");
+              alert((res.data && res.data.detail) || I18N.seatTaken);
             } else {
-              alert("Không giữ được ghế, vui lòng thử lại.");
+              alert(I18N.holdFailed);
             }
             return;
           }
@@ -324,7 +336,9 @@
       li.innerHTML = `<span>${seat.label}</span><span>${fmtVnd(price)}</span>`;
       panel.appendChild(li);
     });
-    if (summary) summary.textContent = selected.size ? `${selected.size} ghế — ${fmtVnd(total)}` : "Chưa chọn ghế nào.";
+    if (summary) summary.textContent = selected.size
+      ? fill(I18N.seatSummary, { n: selected.size, total: fmtVnd(total) })
+      : I18N.noneSelected;
     if (continueBtn) continueBtn.disabled = selected.size === 0;
   }
 })();

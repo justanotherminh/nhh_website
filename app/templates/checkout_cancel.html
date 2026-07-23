@@ -1,11 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Đã hủy đơn hàng — {{ app_name }}{% endblock %}
+{% block title %}{{ t('cancel.title') }} — {{ app_name }}{% endblock %}
 {% block content %}
 <section class="checkout-result">
-  <h1>Đơn hàng đã được hủy</h1>
-  <p class="muted">Ghế bạn giữ đã được mở lại cho người khác. Bạn có thể chọn ghế
-     và thử lại bất cứ lúc nào.</p>
-  {% if order %}<p><strong>Mã đơn hàng:</strong> {{ order.order_code }}</p>{% endif %}
-  <p><a class="btn" href="/tickets">Chọn ghế lại</a></p>
+  <h1>{{ t('cancel.h1') }}</h1>
+  <p class="muted">{{ t('cancel.p') }}</p>
+  {% if order %}<p><strong>{{ t('common.order_code') }}:</strong> {{ order.order_code }}</p>{% endif %}
+  <p><a class="btn" href="/tickets">{{ t('cancel.retry') }}</a></p>
 </section>
 {% endblock %}

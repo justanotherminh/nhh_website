@@ -87,6 +87,8 @@ class Order(Base):
     buyer_name: Mapped[str] = mapped_column(String(200), nullable=False)
     email: Mapped[str] = mapped_column(String(200), nullable=False)
     phone: Mapped[str] = mapped_column(String(30), nullable=False)
+    # Language the buyer used at checkout; the confirmation e-ticket is sent in it.
+    lang: Mapped[str] = mapped_column(String(5), nullable=False, default="vi", server_default="vi")
 
     amount_vnd: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Early-bird discount actually applied to this order (percent; 0 = none). The

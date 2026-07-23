@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app import i18n
 from app.config import settings
 from app.db import get_db
 from app.models import Seat
@@ -87,6 +88,7 @@ def checkout_submit(
             email=email.strip(),
             phone=phone.strip(),
             extend_seconds=settings.payment_window_seconds,
+            lang=getattr(request.state, "lang", i18n.DEFAULT_LANG),
         )
     except orders.NoSeatsHeld:
         return RedirectResponse("/tickets", status_code=303)
@@ -124,7 +126,7 @@ def checkout_submit(
 def checkout_success(request: Request, order: int, db: Session = Depends(get_db)) -> HTMLResponse:
     o = orders.get_order(db, order)
     if o is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        raise HTTPException(status_code=404, detail=i18n.t("err.order_not_found", getattr(request.state, "lang", i18n.DEFAULT_LANG)))
     return templates.TemplateResponse(
         request,
         "checkout_success.html",
@@ -163,7 +165,7 @@ def dev_pay(request: Request, order: int, db: Session = Depends(get_db)) -> HTML
     _dev_only()
     o = orders.get_order(db, order)
     if o is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        raise HTTPException(status_code=404, detail=i18n.t("err.order_not_found", getattr(request.state, "lang", i18n.DEFAULT_LANG)))
     return templates.TemplateResponse(
         request,
         "checkout_devpay.html",

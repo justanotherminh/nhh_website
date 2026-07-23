@@ -35,6 +35,35 @@ body {
 }
 .social-link:hover { opacity: 1; transform: translateY(-1px); }
 .social-link svg { display: block; }
+/* Language toggle: a small segmented pill. Colour is set per-context (accent on
+   the light header, cream over the home hero) and the border/active tint follow
+   currentColor so it reads on both. */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  margin-right: .5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: .78rem;
+}
+.site-header nav a.lang-switch__opt {
+  color: inherit;
+  padding: .26rem .52rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  opacity: .55;
+  transition: opacity .12s ease, background .12s ease;
+}
+.site-header nav a.lang-switch__opt:hover { opacity: .85; }
+.site-header nav a.lang-switch__opt.is-active {
+  opacity: 1;
+  background: rgba(31, 111, 196, .14);
+  cursor: default;
+}
+body.home .lang-switch { color: #f3ece0; }
+body.home .site-header nav a.lang-switch__opt.is-active { background: rgba(255, 255, 255, .22); }
 .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
 .container.wide { max-width: 1700px; }
 .hero h1 { font-size: 2rem; margin-bottom: .25rem; }

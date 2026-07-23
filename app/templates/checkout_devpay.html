@@ -1,23 +1,21 @@
 {% extends "base.html" %}
-{% block title %}[DEV] Mô phỏng thanh toán — {{ app_name }}{% endblock %}
+{% block title %}{{ t('devpay.title') }} — {{ app_name }}{% endblock %}
 {% block content %}
 <section class="checkout-result">
-  <div class="dev-banner">⚙️ Chế độ phát triển — payOS chưa được cấu hình.
-    Đây là trang mô phỏng thanh toán để kiểm thử.</div>
-  <h1>Mô phỏng thanh toán</h1>
-  <p><strong>Mã đơn hàng:</strong> {{ order.order_code }}</p>
-  <p><strong>Số tiền:</strong> {{ "{:,.0f}".format(order.amount_vnd).replace(",", ".") }} đ</p>
-  <p class="muted small">Trong môi trường thật, người mua sẽ được chuyển tới cổng
-     payOS. Ở đây bạn có thể giả lập kết quả:</p>
+  <div class="dev-banner">{{ t('devpay.banner') }}</div>
+  <h1>{{ t('devpay.h1') }}</h1>
+  <p><strong>{{ t('common.order_code') }}:</strong> {{ order.order_code }}</p>
+  <p><strong>{{ t('common.amount') }}:</strong> {{ "{:,.0f}".format(order.amount_vnd).replace(",", ".") }} đ</p>
+  <p class="muted small">{{ t('devpay.explain') }}</p>
 
   <div class="dev-actions">
     <form method="post" action="/checkout/dev-pay/confirm">
       <input type="hidden" name="order" value="{{ order.order_code }}">
-      <button type="submit" class="btn">✅ Giả lập: Thanh toán thành công</button>
+      <button type="submit" class="btn">{{ t('devpay.ok') }}</button>
     </form>
     <form method="post" action="/checkout/dev-pay/cancel">
       <input type="hidden" name="order" value="{{ order.order_code }}">
-      <button type="submit" class="btn btn-secondary">✖ Giả lập: Hủy thanh toán</button>
+      <button type="submit" class="btn btn-secondary">{{ t('devpay.cancel') }}</button>
     </form>
   </div>
 </section>

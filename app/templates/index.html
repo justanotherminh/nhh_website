@@ -24,12 +24,12 @@
           </p>
           {# Broken at the hall/institution seam so a wrap never splits "Âm nhạc". #}
           <p class="home-hero__where">
-            <span>PHÒNG HOÀ NHẠC LỚN</span>
-            <span>HỌC VIỆN ÂM NHẠC QUỐC GIA VIỆT NAM</span>
+            <span>{{ t('hero.where1') }}</span>
+            <span>{{ t('hero.where2') }}</span>
           </p>
         </div>
       </div>
-      <a class="home-hero__cta" href="/tickets">Đặt vé</a>
+      <a class="home-hero__cta" href="/tickets">{{ t('hero.cta') }}</a>
     </div>
 
     {# Featured-moment carousel. Images auto-discovered from static/img/moments/;
@@ -47,97 +47,68 @@
 
   {# The hero is a full screen tall, so nothing below it is visible on load —
      this cue says there's more. #}
-  <a class="home-hero__scroll" href="#gioi-thieu" aria-label="Xem thêm"></a>
+  <a class="home-hero__scroll" href="#gioi-thieu" aria-label="{{ t('hero.scroll') }}"></a>
 
   <script src="{{ static('js/moments.js') }}" defer></script>
 </section>
 
 {# Sits after the hero, so it sticks to the top only once the hero scrolls past —
    no JS needed. #}
-<nav class="section-nav" aria-label="Nội dung trang">
+<nav class="section-nav" aria-label="{{ t('sectionnav.aria') }}">
   <div class="section-nav__inner">
     {# The name lives here, not in the page header — up there the logo already
        carries it. Scrolls back to the top. #}
     <a class="section-nav__brand" href="#top">Nắng Hoàng Hôn Concert</a>
-    <a href="#gioi-thieu">Về chương trình</a>
-    <a href="#loi-ngo">Nắng Hoàng Hôn 2026</a>
-    <a href="#chuong-trinh">Chương trình</a>
-    <a href="/tickets" class="section-nav__cta">Đặt vé</a>
+    <a href="#gioi-thieu">{{ t('nav.about') }}</a>
+    <a href="#loi-ngo">{{ t('loingo.title') }}</a>
+    <a href="#chuong-trinh">{{ t('nav.program') }}</a>
+    <a href="/tickets" class="section-nav__cta">{{ t('nav.tickets') }}</a>
   </div>
 </nav>
 
 {# Intro — the brand link in the header scrolls here. #}
 <section class="section section--tint" id="gioi-thieu">
   <div class="section__inner">
-    <h2 class="section__title">Về chương trình Nắng Hoàng Hôn</h2>
+    <h2 class="section__title">{{ t('intro.title') }}</h2>
 
-    <p>Nắng Hoàng Hôn là chuỗi hòa nhạc từ thiện ra đời năm 2024, lấy cảm hứng từ
-      cuốn “Hồi ký chạy thận” của tác giả Hồ Hồng Việt, người đã kiên cường chiến
-      đấu với bạo bệnh trong suốt 17 năm. Cuốn sách không chỉ là một hành trình cá
-      nhân, mà còn là ngọn lửa thắp lên một chuỗi hòa nhạc mang sứ mệnh nhân văn:
-      dùng âm nhạc làm cầu nối đưa con người đến với những giá trị sống tốt đẹp,
-      đồng thời xoa dịu và nâng đỡ những mảnh đời bệnh nhân chạy thận nhân tạo có
-      hoàn cảnh khó khăn.</p>
+    <p>{{ t('intro.p1') }}</p>
 
-    <p>Trên hành trình hai năm đầu tiên đầy ý nghĩa, Nắng Hoàng Hôn đã khẳng định
-      uy tín và nhận được sự quan tâm, yêu mến của khán giả khi kết nối hàng nghìn
-      tâm hồn qua những giai điệu và câu chuyện chân thật. Từ những bước khởi đầu
-      đầy ấm áp vào năm 2024, cho đến đêm nhạc “Những Lá Thư Chưa Gửi” năm 2025,
-      Nắng Hoàng Hôn đã nhận được sự quyên góp, ủng hộ của đông đảo khán giả, nhà
-      hảo tâm để chung tay tiếp sức và hỗ trợ cho các bệnh nhân chạy thận có hoàn
-      cảnh khó khăn tại Hà Nội.</p>
+    <p>{{ t('intro.p2') }}</p>
 
-    <p>Khác với những buổi hòa nhạc cổ điển truyền thống, đêm nhạc của mỗi mùa được
-      thiết kế như một chuyến viễn du của tâm thức, để mỗi khán giả bước ra khỏi
-      khán phòng đều mang theo một sự thay đổi tích cực từ sâu bên trong.</p>
+    <p>{{ t('intro.p3') }}</p>
 
-    <p>Năm nay, Nắng Hoàng Hôn được vang lên tại Phòng hòa nhạc lớn – Học viện Âm
-      nhạc Quốc gia Việt Nam, chủ đề Sông Trời sẽ là sự giao thoa của nghệ thuật âm
-      nhạc, kể chuyện và hình ảnh, được thể hiện bởi các nghệ sĩ tài năng trong nước
-      và quốc tế. Vượt lên trên một không gian thưởng thức nghệ thuật, phần quyên
-      góp từ khán giả của buổi hòa nhạc sẽ tiếp tục sứ mệnh của Nắng Hoàng Hôn,
-      thắp lên hy vọng sống cao đẹp cho các bệnh nhân chạy thận đang ngày đêm chiến
-      đấu với bệnh tật.</p>
+    <p>{{ t('intro.p4') }}</p>
   </div>
 </section>
 
 {# Foreword to this year's programme. #}
 <section class="section" id="loi-ngo">
   <div class="section__inner">
-    <h2 class="section__title">Nắng Hoàng Hôn 2026</h2>
+    <h2 class="section__title">{{ t('loingo.title') }}</h2>
 
-    <p>Con người sinh ra và lớn lên bên bờ nước. Những dòng sông chảy qua thơ ca
-      của Đỗ Phủ, Apollinaire hay Nguyễn Du... chưa bao giờ ngừng trôi trong tâm
-      tưởng nhân loại. Để rồi, Langston Hughes phải thốt lên:</p>
+    <p>{{ t('loingo.p1') }}</p>
 
     <blockquote class="pull-quote">
-      <p>Tôi biết những dòng sông cổ xưa như thế giới và già hơn dòng huyết quản
-        của loài người. Linh hồn tôi đã trở nên sâu thẳm như những dòng sông…</p>
+      <p>{{ t('loingo.quote') }}</p>
     </blockquote>
 
-    <p>Ta tựa vào sông để sống, gửi vào lòng sông những rực rỡ thành quách, cả
-      những nỗi buồn, hy vọng và kỷ niệm. Sông bao dung nhận lấy, âm thầm cho đi,
-      bốc hơi thành mây trời rồi lại trở về che chở thế gian dưới những hình hài
-      khác.</p>
+    <p>{{ t('loingo.p2') }}</p>
 
-    <p>Sông Trời là khúc ca được dệt nên từ hành trình vạn dặm của một Giọt nước –
-      kẻ viễn du đi xuyên qua các nền văn minh và chạm vào muôn vàn số phận. Đêm
-      nhạc là một lời tự sự dịu dàng về mối duyên nợ thiêng liêng giữa con người và
-      thiên nhiên: nơi những gì ta gửi đi, rốt cuộc, lại là những gì ta nhận về.</p>
+    <p>{{ t('loingo.p3') }}</p>
   </div>
 </section>
 
 {# Programme: the five-chapter running order, then the cast. #}
 <section class="section section--tint" id="chuong-trinh">
   <div class="section__inner">
-    <h2 class="section__title">Chương trình</h2>
+    <h2 class="section__title">{{ t('program.title') }}</h2>
 
     <ol class="chapters">
-      <li><span class="chapters__num">Chương I</span><span class="chapters__name">KHỞI NGUỒN</span></li>
-      <li><span class="chapters__num">Chương II</span><span class="chapters__name">CON NGƯỜI</span></li>
-      <li><span class="chapters__num">Chương III</span><span class="chapters__name">GIỌT NƯỚC CHẠM TỚI CON NGƯỜI</span></li>
-      <li><span class="chapters__num">Chương IV</span><span class="chapters__name">TÀN PHÁ</span></li>
-      <li><span class="chapters__num">Chương V</span><span class="chapters__name">TÁI SINH</span></li>
+      <li><span class="chapters__num">{{ t('chapter.1.num') }}</span><span class="chapters__name">{{ t('chapter.1.name') }}</span></li>
+      <li><span class="chapters__num">{{ t('chapter.2.num') }}</span><span class="chapters__name">{{ t('chapter.2.name') }}</span></li>
+      <li><span class="chapters__num">{{ t('chapter.3.num') }}</span><span class="chapters__name">{{ t('chapter.3.name') }}</span></li>
+      <li><span class="chapters__num">{{ t('chapter.4.num') }}</span><span class="chapters__name">{{ t('chapter.4.name') }}</span></li>
+      <li><span class="chapters__num">{{ t('chapter.5.num') }}</span><span class="chapters__name">{{ t('chapter.5.name') }}</span></li>
     </ol>
 
     {# Cast hidden until the line-up is confirmed — restore when it's final.

@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app import i18n
 from app.config import settings
 from app.db import get_db
 from app.models import Seat, Ticket
@@ -31,7 +32,14 @@ def _get_ticket(db: Session, qr_token: str) -> Ticket | None:
 def view_ticket(qr_token: str, request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     ticket = _get_ticket(db, qr_token)
     if ticket is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy vé.")
+        raise HTTPException(
+            status_code=404,
+            detail=i18n.t("err.ticket_not_found", getattr(request.state, "lang", i18n.DEFAULT_LANG)),
+        )
+    # Show the ticket in the language the buyer used, unless this visitor has
+    # explicitly picked one via the toggle (a `lang` cookie is then present).
+    if "lang" not in request.cookies:
+        request.state.lang = i18n.normalize(ticket.order.lang)
     return templates.TemplateResponse(
         request,
         "ticket.html",
@@ -41,7 +49,10 @@ def view_ticket(qr_token: str, request: Request, db: Session = Depends(get_db)) 
 
 
 @router.get("/ve/{qr_token}/qr.png")
-def ticket_qr(qr_token: str, db: Session = Depends(get_db)) -> Response:
+def ticket_qr(qr_token: str, request: Request, db: Session = Depends(get_db)) -> Response:
     if _get_ticket(db, qr_token) is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy vé.")
+        raise HTTPException(
+            status_code=404,
+            detail=i18n.t("err.ticket_not_found", getattr(request.state, "lang", i18n.DEFAULT_LANG)),
+        )
     return Response(content=ticket_svc.qr_png_bytes(qr_token), media_type="image/png")

@@ -1,42 +1,53 @@
 {% extends "base.html" %}
-{% block title %}Chọn ghế — {{ app_name }}{% endblock %}
+{% block title %}{{ t('tickets.title') }} — {{ app_name }}{% endblock %}
 {% block body_class %}tickets{% endblock %}
 {% block main_class %}wide{% endblock %}
 {% block content %}
 <section class="tickets-head">
-  <h1>Chọn ghế</h1>
-  <p class="muted">Bấm vào ghế còn trống để chọn. Sân khấu ở phía dưới sơ đồ.
-    Cuộn chuột để phóng to / thu nhỏ, kéo để di chuyển.</p>
+  <h1>{{ t('tickets.title') }}</h1>
+  <p class="muted">{{ t('tickets.intro') }}</p>
   <ul class="legend">
-    {% for t in tiers %}
-    <li><span class="swatch swatch--r{{ t.rank }}"></span>
-      {{ t.name }} — {{ "{:,.0f}".format(t.price_vnd).replace(",", ".") }} đ
-      <em>({{ t.available }}/{{ t.total }} trống)</em></li>
+    {% for tier in tiers %}
+    <li><span class="swatch swatch--r{{ tier.rank }}"></span>
+      {{ tier.name }} — {{ "{:,.0f}".format(tier.price_vnd).replace(",", ".") }} đ
+      <em>({{ tier.available }}/{{ tier.total }} {{ t('tickets.free') }})</em></li>
     {% endfor %}
-    <li><span class="swatch swatch-booked"></span> Đã đặt</li>
+    <li><span class="swatch swatch-booked"></span> {{ t('tickets.booked') }}</li>
   </ul>
 </section>
 
 <div class="seatmap-layout">
   <div class="seatmap-container">
     <div id="seatmap" class="seatmap-viewport">
-      <p class="muted">Đang tải sơ đồ…</p>
+      <p class="muted">{{ t('tickets.loading') }}</p>
     </div>
-    <div class="zoom-controls" role="group" aria-label="Phóng to thu nhỏ">
-      <button type="button" id="zoom-in" title="Phóng to">+</button>
-      <button type="button" id="zoom-out" title="Thu nhỏ">−</button>
-      <button type="button" id="zoom-reset" title="Xem toàn cảnh">⟲</button>
+    <div class="zoom-controls" role="group" aria-label="{{ t('tickets.zoom_group') }}">
+      <button type="button" id="zoom-in" title="{{ t('tickets.zoom_in') }}">+</button>
+      <button type="button" id="zoom-out" title="{{ t('tickets.zoom_out') }}">−</button>
+      <button type="button" id="zoom-reset" title="{{ t('tickets.zoom_reset') }}">⟲</button>
     </div>
   </div>
 
   <aside class="selection-box">
-    <h2>Ghế đã chọn</h2>
+    <h2>{{ t('tickets.selected') }}</h2>
     <ul id="selection" class="selection-list"></ul>
-    <p id="selection-summary" class="selection-summary">Chưa chọn ghế nào.</p>
-    <button id="continue-btn" class="btn" disabled>Tiếp tục</button>
-    <p class="muted small">Thanh toán sẽ được kết nối ở bước sau.</p>
+    <p id="selection-summary" class="selection-summary">{{ t('tickets.none_selected') }}</p>
+    <button id="continue-btn" class="btn" disabled>{{ t('tickets.continue') }}</button>
+    <p class="muted small">{{ t('tickets.pay_later') }}</p>
   </aside>
 </div>
 
+{# Strings the seat-map renderer shows client-side, translated server-side so the
+   one script serves both languages. #}
+<script>
+  window.I18N = {
+    mapLoadError: {{ t('js.map_load_error')|tojson }},
+    maxSeats: {{ t('js.max_seats')|tojson }},
+    seatTaken: {{ t('js.seat_taken')|tojson }},
+    holdFailed: {{ t('js.hold_failed')|tojson }},
+    seatSummary: {{ t('js.seat_summary')|tojson }},
+    noneSelected: {{ t('tickets.none_selected')|tojson }},
+  };
+</script>
 <script src="{{ static('js/seatmap.js') }}" defer></script>
 {% endblock %}

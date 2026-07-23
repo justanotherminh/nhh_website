@@ -2,10 +2,11 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import i18n
 from app.config import settings
 from app.db import get_db
 from app.models import PriceTier, Seat
@@ -13,6 +14,36 @@ from app.services import images as images_svc
 from app.templates import static_url, templates
 
 router = APIRouter()
+
+
+# One year: the choice is a preference, not a session, so it should persist.
+_LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
+
+def _safe_next(raw: str | None) -> str:
+    """A same-site redirect target: a single leading slash, no scheme or host.
+
+    Rejects protocol-relative (``//evil.com``) and absolute URLs so the toggle
+    can't be turned into an open redirect.
+    """
+    if raw and raw.startswith("/") and not raw.startswith("//"):
+        return raw
+    return "/"
+
+
+@router.get("/lang/{code}")
+def set_language(code: str, request: Request, next: str = "/") -> RedirectResponse:
+    """Switch the display language, then return to where the visitor was.
+
+    Unknown codes fall back to the default, so a hand-typed URL can't wedge the
+    cookie into an invalid state.
+    """
+    lang = i18n.normalize(code)
+    resp = RedirectResponse(_safe_next(next), status_code=303)
+    resp.set_cookie(
+        "lang", lang, max_age=_LANG_COOKIE_MAX_AGE, httponly=False, samesite="lax"
+    )
+    return resp
 
 # Hero reel photos: whatever managers marked "show on homepage" in the admin image
 # library (stored in the uploads volume). Until they add any, fall back to the

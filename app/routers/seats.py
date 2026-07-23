@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app import i18n
 from app.config import settings
 from app.db import get_db
 from app.services import cart as cartmod
@@ -28,15 +29,16 @@ def hold(
 
     # Enforce the per-order cap server-side. Re-holding a seat this cart already
     # has is a refresh, not a new seat, so it's always allowed.
+    lang = getattr(request.state, "lang", i18n.DEFAULT_LANG)
     already = holds.own_held_seat_ids(db, cart_id)
     if body.seat_id not in already and len(already) >= settings.max_seats_per_order:
         raise HTTPException(
             status_code=409,
-            detail=f"Bạn chỉ có thể giữ tối đa {settings.max_seats_per_order} ghế mỗi lần.",
+            detail=i18n.t("err.too_many_seats", lang, n=settings.max_seats_per_order),
         )
 
     if not holds.acquire(db, body.seat_id, cart_id, settings.hold_ttl_seconds):
-        raise HTTPException(status_code=409, detail="Ghế này vừa được người khác chọn.")
+        raise HTTPException(status_code=409, detail=i18n.t("err.seat_taken", lang))
 
     return {
         "ok": True,

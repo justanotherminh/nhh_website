@@ -1,26 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Vé — {{ seat.label }} — {{ app_name }}{% endblock %}
+{% block title %}{{ t('ticket.title') }} — {{ seat_label(seat) }} — {{ app_name }}{% endblock %}
 {% block content %}
 <section class="ticket-card">
   <div class="ticket-head">
     <h1>{{ app_name }}</h1>
-    <p class="muted">Đêm nhạc gây quỹ từ thiện — Hà Nội</p>
+    <p class="muted">{{ t('ticket.tagline') }}</p>
   </div>
 
   <div class="ticket-body">
     <div class="ticket-info">
-      <p class="ticket-seat">{{ seat.label }}</p>
+      <p class="ticket-seat">{{ seat_label(seat) }}</p>
       <dl>
-        <dt>Hạng vé</dt><dd>{{ seat.tier.name }}</dd>
-        <dt>Giá</dt><dd>{{ "{:,.0f}".format(seat.tier.price_vnd).replace(",", ".") }} đ</dd>
-        <dt>Mã vé</dt><dd>{{ ticket.ticket_code }}</dd>
-        <dt>Người mua</dt><dd>{{ order.buyer_name }}</dd>
-        <dt>Đơn hàng</dt><dd>{{ order.order_code }}</dd>
+        <dt>{{ t('ticket.class') }}</dt><dd>{{ seat.tier.name }}</dd>
+        <dt>{{ t('ticket.price') }}</dt><dd>{{ "{:,.0f}".format(seat.tier.price_vnd).replace(",", ".") }} đ</dd>
+        <dt>{{ t('ticket.code') }}</dt><dd>{{ ticket.ticket_code }}</dd>
+        <dt>{{ t('ticket.buyer') }}</dt><dd>{{ order.buyer_name }}</dd>
+        <dt>{{ t('ticket.order') }}</dt><dd>{{ order.order_code }}</dd>
       </dl>
     </div>
     <div class="ticket-qr">
-      <img src="/ve/{{ ticket.qr_token }}/qr.png" alt="Mã QR vé" width="200" height="200">
-      <p class="muted small">Xuất trình mã này tại cửa vào</p>
+      <img src="/ve/{{ ticket.qr_token }}/qr.png" alt="{{ t('ticket.qr_alt') }}" width="200" height="200">
+      <p class="muted small">{{ t('ticket.qr_note') }}</p>
     </div>
   </div>
 </section>
