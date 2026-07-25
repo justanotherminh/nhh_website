@@ -473,10 +473,13 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 /* Admin invitation map: VIP seats stand out and are clickable; others are dimmed. */
 .seat.seat-vip { fill: #f7dfa8 !important; stroke: #c8912f !important; }
 .seat.seat-vip-done { fill: #bfe3cc !important; stroke: #4f9d69 !important; }
+.seat.seat-vip-sent { fill: #bcd4f0 !important; stroke: #3f74b8 !important; }
 .seat.seat-nonvip { fill: #d9dde2 !important; stroke: #c4c9d0 !important; opacity: .5; }
-.seat-g:hover .seat.seat-vip, .seat-g:hover .seat.seat-vip-done { stroke-width: 2.5; }
+/* Only unexported VIP seats are pickable, so only they get the hover cue. */
+.seat-g:hover .seat.seat-vip { stroke-width: 2.5; }
 .swatch--vip { background: #f7dfa8; border-color: #c8912f; }
 .swatch--vip-done { background: #bfe3cc; border-color: #4f9d69; }
+.swatch--vip-sent { background: #bcd4f0; border-color: #3f74b8; }
 .swatch--nonvip { background: #d9dde2; }
 
 /* States override the tier palette (need !important to beat .seat-g.tier-r* ). */
@@ -529,6 +532,12 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 .selection-box h2 { margin-top: 0; font-size: 1.1rem; }
 .selection-list { list-style: none; padding: 0; margin: 0 0 .5rem; max-height: 40vh; overflow-y: auto; }
 .selection-list li { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; padding: .3rem 0; border-bottom: 1px dashed #eee; }
+/* VIP pick-list: one row per selected seat, seat label + recipient-name input. */
+.vip-picklist li.vip-pick { flex-direction: column; align-items: stretch; gap: .25rem; }
+.vip-pick__seat { font-weight: 600; }
+.vip-pick__name { width: 100%; padding: .35rem .5rem; font-size: .85rem; border: 1px solid #cfd3d8; border-radius: 6px; }
+.export-status { color: var(--muted); min-height: 1.1em; }
+.export-status.is-error { color: #a12; }
 .selection-summary { font-weight: 700; }
 .selection-box .btn { width: 100%; text-align: center; border: 0; cursor: pointer; font-size: 1rem; }
 .selection-box .btn:disabled {
@@ -687,6 +696,13 @@ body.checkin--invalid { background: #b02020; }
 .card-label { font-size: .85rem; color: var(--muted); }
 .card-accent { background: #1d3557; }
 .card-accent .card-num, .card-accent .card-label { color: #fff; }
+.orders-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.orders-toggle { margin: 0; }
+.orders-toggle label { display: inline-flex; align-items: center; gap: .4rem; font-size: .9rem; color: var(--muted); cursor: pointer; }
+/* Page navigation under the orders table. */
+.pager { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: -1rem 0 2rem; }
+.pager-info { font-size: .9rem; color: var(--muted); }
+.pager .is-disabled { opacity: .45; pointer-events: none; }
 .admin-table { border-collapse: collapse; width: 100%; margin: .5rem 0 2rem; font-size: .9rem; }
 .admin-table th, .admin-table td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid #eee; vertical-align: top; }
 .admin-table th { color: var(--muted); font-weight: 600; }
@@ -696,6 +712,8 @@ body.checkin--invalid { background: #b02020; }
 .status-cancelled { background: #eee; color: #888; }
 .status-expired { background: #eee; color: #888; }
 .status-comp { background: #e3e0f5; color: #4b3f8a; }
+.status-exported { background: #bfe3cc; color: #1c6b34; }
+.status-sent { background: #bcd4f0; color: #21507f; }
 .link-btn { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
 
 /* ---- admin images ---- */

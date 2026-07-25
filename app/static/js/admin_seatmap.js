@@ -8,11 +8,16 @@
   if (!root) return;
   const panel = document.getElementById("selection");
   const summary = document.getElementById("selection-summary");
-  const exportBtn = document.getElementById("continue-btn");
-  const exportForm = document.getElementById("exportForm");
-  const exportIds = document.getElementById("export-seat-ids");
+  const exportBtn = document.getElementById("export-btn");
+  const statusEl = document.getElementById("export-status");
 
-  const selected = new Map(); // seatId -> seat
+  const selected = new Map(); // seatId -> { seat, name }
+
+  function setStatus(msg, isErr) {
+    if (!statusEl) return;
+    statusEl.textContent = msg || "";
+    statusEl.classList.toggle("is-error", !!isErr);
+  }
 
   function el(name, attrs, parent) {
     const e = document.createElementNS(SVGNS, name);
@@ -76,20 +81,30 @@
       const tier = tierById[s.tier_id];
       const rank = tier ? tier.rank : 0;
       const g = el("g", { class: "seat-g tier-r" + rank }, svg);
-      const cls = s.vip ? (s.exported ? "seat seat-vip-done" : "seat seat-vip") : "seat seat-nonvip";
+      // Three VIP states: unexported (pickable), exported, and sent to the guest.
+      let cls = "seat seat-nonvip";
+      if (s.vip) {
+        cls = s.vip_state === "sent" ? "seat seat-vip-sent"
+            : s.vip_state === "exported" ? "seat seat-vip-done"
+            : "seat seat-vip";
+      }
       const rect = el("rect", { x: s.x, y: s.y, width: sz, height: sz, rx: 3, class: cls }, g);
       el("text", { x: s.x + sz / 2, y: s.y + sz / 2, class: "seat-num", "text-anchor": "middle", "dominant-baseline": "central" }, g).textContent = s.num;
-      if (s.vip) {
+      // Only unexported VIP seats can be selected; exported/sent ones are locked.
+      if (s.vip && s.vip_state === "none") {
         g.style.cursor = "pointer";
-        el("title", {}, g).textContent = s.label + (s.exported ? " — đã xuất vé" : "");
+        el("title", {}, g).textContent = s.label;
         seatReg.set(g, { seat: s, g, rect });
+      } else if (s.vip) {
+        el("title", {}, g).textContent =
+          s.label + (s.vip_state === "sent" ? " — đã gửi cho khách" : " — đã xuất vé");
       }
     });
 
     function toggle(entry) {
       const { seat, g } = entry;
       if (selected.has(seat.id)) { selected.delete(seat.id); g.classList.remove("selected"); }
-      else { selected.set(seat.id, seat); g.classList.add("selected"); }
+      else { selected.set(seat.id, { seat, name: "" }); g.classList.add("selected"); }
       updatePanel();
     }
 
@@ -195,24 +210,43 @@
     document.getElementById("zoom-out")?.addEventListener("click", () => { const c = center(); zoomAt(c.cx, c.cy, 1 / 1.4); });
     document.getElementById("zoom-reset")?.addEventListener("click", fit);
 
-    // Export: put the selected ids on the form; mark them exported optimistically.
-    exportForm?.addEventListener("submit", (e) => {
-      if (!selected.size) { e.preventDefault(); return; }
-      exportIds.value = [...selected.keys()].join(",");
-      const done = [...selected.keys()];
-      setTimeout(() => {
-        done.forEach((id) => {
-          seatReg.forEach((entry) => {
-            if (entry.seat.id === id) {
-              entry.rect.classList.remove("seat-vip");
-              entry.rect.classList.add("seat-vip-done");
-              entry.g.classList.remove("selected");
-            }
-          });
-          selected.delete(id);
+    // Export: generate + store a PDF per selected seat, then go to the depot page.
+    exportBtn?.addEventListener("click", async () => {
+      if (!selected.size) return;
+      const tickets = [...selected.values()].map((e) => ({
+        seat_id: e.seat.id, name: (e.name || "").trim(),
+      }));
+      const missing = tickets.filter((t) => !t.name).length;
+      if (missing) {
+        setStatus(`Vui lòng nhập tên người nhận cho ${missing} ghế còn thiếu.`, true);
+        return;
+      }
+      exportBtn.disabled = true;
+      setStatus("Đang tạo vé…");
+      try {
+        const r = await fetch("/admin/invitations/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tickets }),
         });
-        updatePanel();
-      }, 400);
+        const data = await r.json().catch(() => null);
+        if (r.ok && data && data.ok && (!data.errors || !data.errors.length)) {
+          // Freshly generated — view/download them in the depot.
+          window.location.href = "/admin/invitations/tickets";
+          return;
+        }
+        const errs = (data && data.errors) || [];
+        setStatus(
+          errs.length
+            ? `Tạo ${data.created} vé, ${errs.length} lỗi: ${errs.join("; ")}`
+            : "Có lỗi khi tạo vé, vui lòng thử lại.",
+          true,
+        );
+        exportBtn.disabled = false;
+      } catch (_) {
+        setStatus("Không kết nối được máy chủ.", true);
+        exportBtn.disabled = false;
+      }
     });
 
     window.addEventListener("resize", fit);
@@ -223,10 +257,25 @@
   function updatePanel() {
     if (!panel) return;
     panel.innerHTML = "";
-    const items = [...selected.values()].sort((a, b) => a.label.localeCompare(b.label, "vi"));
-    items.forEach((seat) => {
+    // Rebuilt only when the selection changes (not on keystrokes), so typing into
+    // a name field is never interrupted; the field writes straight to entry.name.
+    const items = [...selected.values()].sort(
+      (a, b) => a.seat.label.localeCompare(b.seat.label, "vi")
+    );
+    items.forEach((entry) => {
       const li = document.createElement("li");
-      li.innerHTML = `<span>${seat.label}</span>`;
+      li.className = "vip-pick";
+      const label = document.createElement("span");
+      label.className = "vip-pick__seat";
+      label.textContent = entry.seat.label;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "vip-pick__name";
+      input.placeholder = "Tên người nhận";
+      input.value = entry.name || "";
+      input.addEventListener("input", () => { entry.name = input.value; });
+      li.appendChild(label);
+      li.appendChild(input);
       panel.appendChild(li);
     });
     if (summary) summary.textContent = selected.size ? `${selected.size} ghế` : "Chưa chọn ghế nào.";

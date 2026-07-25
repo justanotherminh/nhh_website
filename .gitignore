@@ -50,3 +50,6 @@ postgres_data/
 
 # Manager-uploaded images (persistent volume in prod; runtime data, never committed)
 app/static/uploads/
+
+# Generated VIP invitation ticket PDFs (persistent volume in prod; runtime data)
+app/vip_depot/

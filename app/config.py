@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # (Early-bird discount is now managed at runtime from the admin UI — stored in
     #  the app_settings table, see app/services/pricing.py.)
 
+    # VIP invitation ticket PDFs: a persistent depot OUTSIDE the static mount, so a
+    # generated ticket (which carries a live check-in QR) is never publicly
+    # downloadable — it's streamed only through the authenticated admin route.
+    vip_depot_dir: str = "app/vip_depot"
+
     # Seat holds (seconds)
     hold_ttl_seconds: int = 600  # 10 min while browsing
     payment_window_seconds: int = 900  # 15 min once a payOS link is created

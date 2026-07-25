@@ -30,6 +30,10 @@ services:
     volumes:
       # Manager-uploaded images: persist across rebuilds, served at /static/uploads/.
       - uploads_data:/app/app/static/uploads
+      # Generated VIP invitation ticket PDFs. NOT under /static — they hold a live
+      # check-in QR, so they're served only through the authenticated admin route.
+      # Path matches settings.vip_depot_dir ("app/vip_depot") relative to WORKDIR /app.
+      - vip_tickets_data:/app/app/vip_depot
 
   caddy:
     image: caddy:2
@@ -49,3 +53,4 @@ volumes:
   caddy_data:
   caddy_config:
   uploads_data:
+  vip_tickets_data:

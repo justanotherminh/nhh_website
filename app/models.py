@@ -140,6 +140,38 @@ class Ticket(Base):
     seat: Mapped[Seat] = relationship()
 
 
+class VipTicket(Base):
+    """A generated VIP invitation ticket: its stored PDF and delivery state.
+
+    One row per VIP seat that has been exported. The comp ``Ticket`` it points at
+    holds the QR; this row adds the recipient's name, the depot PDF filename, and
+    whether the ticket has been printed and handed over. A VIP seat's three map
+    states derive entirely from this row: no row = unexported, row with
+    ``sent_at`` null = exported, ``sent_at`` set = sent.
+    """
+    __tablename__ = "vip_tickets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # One active VIP ticket per seat: exporting the same seat twice is blocked.
+    seat_id: Mapped[int] = mapped_column(
+        ForeignKey("seats.id"), unique=True, nullable=False
+    )
+    ticket_id: Mapped[int] = mapped_column(ForeignKey("tickets.id"), nullable=False)
+    recipient_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Filename within settings.vip_depot_dir (never a path); see services/vip.py.
+    pdf_filename: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # Set when a manager marks the ticket printed and handed to the recipient.
+    sent_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    seat: Mapped[Seat] = relationship()
+    ticket: Mapped[Ticket] = relationship()
+
+
 class Announcement(Base):
     """A bulk email composed in the admin UI and sent to ticket holders.
 

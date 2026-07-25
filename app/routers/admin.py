@@ -6,30 +6,33 @@ Caddy's HTTPS the Basic Auth password is the gate — keep it strong.
 """
 from __future__ import annotations
 
-import base64
 import datetime as dt
+import logging
 import secrets
 from zoneinfo import ZoneInfo
 
 _HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.db import get_db
-from app.models import Announcement, Order, OrderItem, PriceTier, Seat, Ticket
+from app.models import Announcement, Order, OrderItem, PriceTier, Seat, Ticket, VipTicket
 from app.routers.seatmap import build_seatmap
 from app.services import announcements as announce_svc
 from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
-from app.services import tickets as tickets_svc
+from app.services import vip as vip_svc
 from app.templates import templates
 from scripts.import_vip_seats import reserved_seat_ids
+
+log = logging.getLogger("admin")
 
 _basic = HTTPBasic()
 
@@ -48,10 +51,17 @@ def require_admin(creds: HTTPBasicCredentials = Depends(_basic)) -> str:
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
+ORDERS_PER_PAGE = 25
+
 
 @router.get("", response_class=HTMLResponse)
 @router.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+def dashboard(
+    request: Request,
+    page: int = 1,
+    cancelled: int = 0,
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
     # Seat occupancy.
     seat_counts = dict(
         db.execute(select(Seat.status, func.count()).group_by(Seat.status)).all()
@@ -105,9 +115,26 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
         for i, (t, total, avail) in enumerate(tier_rows)
     ]
 
-    # Recent orders.
-    recent = db.execute(
-        select(Order).options(selectinload(Order.items)).order_by(Order.created_at.desc()).limit(50)
+    # Orders listing — paginated so the whole table is never loaded at once.
+    # Cancelled orders are hidden unless explicitly requested; the same filter is
+    # applied to the COUNT and the page query so paging stays consistent.
+    show_cancelled = bool(cancelled)
+    list_conds = [] if show_cancelled else [Order.status != "cancelled"]
+
+    total_orders = db.execute(
+        select(func.count()).select_from(Order).where(*list_conds)
+    ).scalar_one()
+    total_pages = max(1, (total_orders + ORDERS_PER_PAGE - 1) // ORDERS_PER_PAGE)
+    page = min(max(1, page), total_pages)          # clamp to a real page
+    offset = (page - 1) * ORDERS_PER_PAGE
+
+    orders = db.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(*list_conds)
+        .order_by(Order.created_at.desc())
+        .limit(ORDERS_PER_PAGE)
+        .offset(offset)
     ).scalars().all()
 
     return templates.TemplateResponse(
@@ -124,7 +151,11 @@ def dashboard(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
             "comps_issued": comps_issued,
             "order_stats": order_stats,
             "tiers": tiers,
-            "orders": recent,
+            "orders": orders,
+            "page": page,
+            "total_pages": total_pages,
+            "total_orders": total_orders,
+            "show_cancelled": show_cancelled,
         },
     )
 
@@ -276,56 +307,104 @@ def invitations(request: Request) -> HTMLResponse:
 
 @router.get("/invitations/map")
 def invitations_map(db: Session = Depends(get_db)) -> dict:
-    """Seat-map JSON annotated for the admin: which seats are VIP, and which of
-    those have already had their ticket exported."""
+    """Seat-map JSON annotated for the admin: which seats are VIP, and each VIP
+    seat's export state — "none" (unexported), "exported", or "sent"."""
     data = build_seatmap(db)
     vip_ids = reserved_seat_ids(db)
-    exported = set(
-        db.execute(
-            select(Ticket.seat_id).join(Order, Ticket.order_id == Order.id)
-            .where(Order.kind == "comp")
-        ).scalars().all()
-    )
+    states = vip_svc.states_by_seat(db)
     for s in data["seats"]:
-        s["vip"] = s["id"] in vip_ids
-        s["exported"] = s["id"] in exported
+        is_vip = s["id"] in vip_ids
+        state = states.get(s["id"], "none") if is_vip else "none"
+        s["vip"] = is_vip
+        s["vip_state"] = state
+        s["exported"] = state != "none"   # kept for any older consumers
     return data
 
 
-@router.post("/invitations/print", response_class=HTMLResponse)
-def print_tickets(
-    request: Request,
-    seat_ids: str = Form(""),
-    db: Session = Depends(get_db),
-) -> HTMLResponse:
-    """Print-ready sheet for the selected VIP seats. Mints any missing tickets, then
-    renders each as a card (seat + write-on name line + QR embedded as a data URI)."""
-    ids = [int(x) for x in seat_ids.split(",") if x.strip().isdigit()]
-    vip_ids = reserved_seat_ids(db)
-    ids = [i for i in ids if i in vip_ids]   # only ever print VIP seats
-    orders_svc.ensure_reserved_tickets(db, ids)
+class _ExportItem(BaseModel):
+    seat_id: int
+    name: str = ""
 
-    rows = db.execute(
-        select(Ticket)
-        .options(selectinload(Ticket.seat))
-        .where(Ticket.seat_id.in_(ids))
-        .order_by(Ticket.seat_id)
-    ).scalars().all() if ids else []
-    cards = [
+
+class _ExportBody(BaseModel):
+    tickets: list[_ExportItem]
+
+
+@router.post("/invitations/export")
+def invitations_export(body: _ExportBody, db: Session = Depends(get_db)) -> dict:
+    """Generate + store a PDF ticket for each (VIP seat, recipient name).
+
+    Only VIP-reserved seats are ever touched; a seat that's already been exported
+    is skipped rather than duplicated. Returns per-request counts so the map can
+    report what happened.
+    """
+    vip_ids = reserved_seat_ids(db)
+    created, skipped, errors = 0, 0, []
+    for item in body.tickets:
+        if item.seat_id not in vip_ids:
+            errors.append(f"{item.seat_id}: không phải ghế vé mời")
+            continue
+        try:
+            vip_svc.export_seat(db, item.seat_id, item.name)
+            created += 1
+        except vip_svc.AlreadyExported:
+            skipped += 1
+        except vip_svc.NotExportable as exc:
+            errors.append(f"{item.seat_id}: {exc}")
+        except Exception:                       # noqa: BLE001 - one bad seat won't stop the rest
+            log.exception("VIP export failed for seat %s", item.seat_id)
+            errors.append(f"{item.seat_id}: lỗi tạo vé")
+    return {"ok": True, "created": created, "skipped": skipped, "errors": errors}
+
+
+@router.get("/invitations/tickets", response_class=HTMLResponse)
+def invitations_tickets(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """The depot: every generated VIP ticket, with download + mark-sent controls."""
+    rows = vip_svc.list_tickets(db)
+    tickets = [
         {
-            "seat": t.seat.label,
-            "seat_short": f"{t.seat.row_label} · {t.seat.seat_number}",
-            "code": t.ticket_code,
-            "qr": "data:image/png;base64,"
-            + base64.b64encode(tickets_svc.qr_png_bytes(t.qr_token)).decode(),
+            "id": v.id,
+            "seat": v.seat.label,
+            "recipient": v.recipient_name,
+            "created": v.created_at.astimezone(_HANOI).strftime("%d/%m/%Y %H:%M"),
+            "sent": v.sent_at is not None,
+            "sent_at": v.sent_at.astimezone(_HANOI).strftime("%d/%m/%Y %H:%M") if v.sent_at else "",
         }
-        for t in rows
+        for v in rows
     ]
+    sent_count = sum(1 for t in tickets if t["sent"])
     return templates.TemplateResponse(
         request,
-        "admin_print_tickets.html",
-        {"app_name": settings.app_name, "cards": cards},
+        "admin_vip_tickets.html",
+        {
+            "app_name": settings.app_name,
+            "tickets": tickets,
+            "sent_count": sent_count,
+            "notice": request.query_params.get("notice"),
+        },
     )
+
+
+@router.get("/invitations/tickets/{vip_id}/pdf")
+def invitations_ticket_pdf(vip_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    """Stream a stored VIP ticket PDF. Admin-only (the whole router is gated), so
+    the depot stays off the public web even though the QR inside is a live pass."""
+    vip = db.get(VipTicket, vip_id)
+    if vip is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy vé.")
+    path = vip_svc.depot_file(vip.pdf_filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Tệp PDF không tồn tại.")
+    return FileResponse(path, media_type="application/pdf", filename=vip_svc.download_name(vip))
+
+
+@router.post("/invitations/tickets/{vip_id}/sent")
+def invitations_ticket_sent(
+    vip_id: int, undo: str = Form(""), db: Session = Depends(get_db)
+) -> RedirectResponse:
+    """Mark a VIP ticket printed-and-sent (or clear it again with ?undo)."""
+    vip_svc.mark_sent(db, vip_id, sent=not bool(undo))
+    return RedirectResponse("/admin/invitations/tickets", status_code=303)
 
 
 # -------------------------------------------------------------- announcements

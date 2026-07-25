@@ -44,7 +44,20 @@
     </tbody>
   </table>
 
-  <h2>Đơn hàng gần đây</h2>
+  {# Suffix that carries the "show cancelled" state across page links. #}
+  {% set c = '&cancelled=1' if show_cancelled else '' %}
+  <div class="orders-head">
+    <h2>Đơn hàng <span class="muted small">({{ total_orders }})</span></h2>
+    {# GET form so toggling is a plain, bookmarkable navigation; omitting page
+       resets to the first page, which is what you want when the filter changes. #}
+    <form method="get" action="/admin" class="orders-toggle">
+      <label>
+        <input type="checkbox" name="cancelled" value="1"
+               onchange="this.form.submit()" {% if show_cancelled %}checked{% endif %}>
+        Hiện đơn đã hủy
+      </label>
+    </form>
+  </div>
   <table class="admin-table">
     <thead>
       <tr><th>Mã đơn</th><th>Người mua</th><th>Liên hệ</th><th>Ghế</th><th>Số tiền</th><th>Trạng thái</th><th></th></tr>
@@ -72,5 +85,21 @@
       {% endfor %}
     </tbody>
   </table>
+
+  {% if total_pages > 1 %}
+  <nav class="pager" aria-label="Phân trang đơn hàng">
+    {% if page > 1 %}
+    <a class="btn btn-secondary small-btn" href="/admin?page={{ page - 1 }}{{ c }}">← Trước</a>
+    {% else %}
+    <span class="btn btn-secondary small-btn is-disabled" aria-disabled="true">← Trước</span>
+    {% endif %}
+    <span class="pager-info">Trang {{ page }}/{{ total_pages }}</span>
+    {% if page < total_pages %}
+    <a class="btn btn-secondary small-btn" href="/admin?page={{ page + 1 }}{{ c }}">Sau →</a>
+    {% else %}
+    <span class="btn btn-secondary small-btn is-disabled" aria-disabled="true">Sau →</span>
+    {% endif %}
+  </nav>
+  {% endif %}
 </section>
 {% endblock %}

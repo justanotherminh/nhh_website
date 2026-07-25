@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Vé mời đã tạo — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Vé mời đã tạo</h1>
+    <a href="/admin/invitations" class="btn btn-secondary small-btn">← Sơ đồ vé mời</a>
+  </div>
+
+  {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
+
+  <p class="muted">Tổng <strong>{{ tickets|length }}</strong> vé ·
+    <strong>{{ sent_count }}</strong> đã gửi. Tải PDF về để in, sau đó đánh dấu
+    “đã gửi” khi vé đã được trao cho khách.</p>
+
+  <table class="admin-table">
+    <thead>
+      <tr><th>Ghế</th><th>Người nhận</th><th>Tạo lúc</th><th>Trạng thái</th><th>PDF</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for t in tickets %}
+      <tr>
+        <td>{{ t.seat }}</td>
+        <td>{{ t.recipient }}</td>
+        <td class="nowrap small">{{ t.created }}</td>
+        <td>
+          {% if t.sent %}
+          <span class="status status-sent">Đã gửi</span>
+          <span class="muted small nowrap">{{ t.sent_at }}</span>
+          {% else %}
+          <span class="status status-exported">Đã xuất</span>
+          {% endif %}
+        </td>
+        <td><a href="/admin/invitations/tickets/{{ t.id }}/pdf" class="link-btn">Tải PDF</a></td>
+        <td>
+          {% if t.sent %}
+          <form method="post" action="/admin/invitations/tickets/{{ t.id }}/sent" class="inline">
+            <input type="hidden" name="undo" value="1">
+            <button type="submit" class="link-btn">Bỏ đánh dấu</button>
+          </form>
+          {% else %}
+          <form method="post" action="/admin/invitations/tickets/{{ t.id }}/sent" class="inline">
+            <button type="submit" class="link-btn">Đánh dấu đã gửi</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">Chưa có vé mời nào được tạo.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
