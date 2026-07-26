@@ -53,3 +53,7 @@ app/static/uploads/
 
 # Generated VIP invitation ticket PDFs (persistent volume in prod; runtime data)
 app/vip_depot/
+
+# Design source PDFs at repo root (e.g. the ticket template); optimized
+# derivatives that the generator uses live under app/assets/ and ARE tracked.
+/*.pdf

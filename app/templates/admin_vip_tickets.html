@@ -22,7 +22,7 @@
       {% for t in tickets %}
       <tr>
         <td>{{ t.seat }}</td>
-        <td>{{ t.recipient }}</td>
+        <td>{{ t.recipient or "—" }}</td>
         <td class="nowrap small">{{ t.created }}</td>
         <td>
           {% if t.sent %}

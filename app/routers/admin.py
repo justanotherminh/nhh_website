@@ -349,8 +349,6 @@ def invitations_export(body: _ExportBody, db: Session = Depends(get_db)) -> dict
             created += 1
         except vip_svc.AlreadyExported:
             skipped += 1
-        except vip_svc.NotExportable as exc:
-            errors.append(f"{item.seat_id}: {exc}")
         except Exception:                       # noqa: BLE001 - one bad seat won't stop the rest
             log.exception("VIP export failed for seat %s", item.seat_id)
             errors.append(f"{item.seat_id}: lỗi tạo vé")

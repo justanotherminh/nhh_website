@@ -157,11 +157,20 @@ def test_export_rejects_non_vip_seat(blocked_seats, admin_creds, monkeypatch, tm
         db.close()
 
 
-def test_export_requires_a_name(as_vip, admin_creds):
+def test_export_allows_blank_name(as_vip, admin_creds):
+    # Names are optional now (the ticket is anonymous/transferable): a blank name
+    # still produces a ticket, just with no recipient recorded.
+    seat_id = as_vip[0]
     c = TestClient(app)
     r = c.post("/admin/invitations/export", auth=admin_creds,
-               json={"tickets": [{"seat_id": as_vip[0], "name": "   "}]})
-    assert r.json()["created"] == 0 and r.json()["errors"]
+               json={"tickets": [{"seat_id": seat_id, "name": "   "}]})
+    assert r.json()["created"] == 1 and not r.json()["errors"]
+    db = SessionLocal()
+    try:
+        vt = db.execute(select(VipTicket).where(VipTicket.seat_id == seat_id)).scalar_one()
+        assert vt.recipient_name == ""
+    finally:
+        db.close()
 
 
 # ------------------------------------------------------- download + mark sent

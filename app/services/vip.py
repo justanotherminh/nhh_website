@@ -20,7 +20,9 @@ import re
 import secrets
 from pathlib import Path
 
+import qrcode
 from fpdf import FPDF
+from PIL import Image, ImageDraw
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -31,22 +33,31 @@ from app.services import tickets as tickets_svc
 
 log = logging.getLogger("vip")
 
-_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
-_FONT = "Noto"
+_ASSET_DIR = Path(__file__).resolve().parent.parent / "assets"
+_FONT_DIR = _ASSET_DIR / "fonts"
+# The invitation's own typeface is Poppins (a geometric sans); Montserrat is the
+# closest match we can ship (also SIL OFL) and blends on the all-caps seat line.
+_FONT = "Montserrat"
+# Optimized raster of the designed A5 invitation (the "SỐ GHẾ:" template). The
+# 558 MB source PDF is a design artifact and stays out of the repo; this derivative
+# is what every generated ticket is drawn on top of.
+_BG = _ASSET_DIR / "vip_ticket_bg.jpg"
 
-# Palette, matched to the printed-ticket look elsewhere in the app.
-_INK = (28, 34, 48)
-_MUTED = (120, 120, 120)
-_ACCENT = (29, 53, 87)
-_HAIRLINE = (208, 208, 208)
+# A5 portrait, matching the template exactly.
+_PAGE_W, _PAGE_H = 148.0, 210.0
+
+# The template's "SỐ GHẾ:" ink, sampled from the design.
+_NAVY = (40, 56, 102)
+_MUTED = (90, 108, 140)
+
+# Position of the "SỐ GHẾ:" line, measured from the design (px -> mm).
+_SEAT_BASELINE_Y = 194.5   # text baseline
+_SEAT_X = 32.0             # just past the colon (~27.7mm) + a small gap
+_SEAT_PT = 15.0            # ≈ the label's cap height (3.64mm)
 
 
 class AlreadyExported(Exception):
     """This seat already has a VIP ticket; re-exporting is refused."""
-
-
-class NotExportable(Exception):
-    """The seat can't be exported (missing name, not a VIP seat, etc.)."""
 
 
 def _depot() -> Path:
@@ -72,66 +83,63 @@ def depot_file(filename: str) -> Path | None:
 # --------------------------------------------------------------------- PDF
 
 def _new_pdf() -> FPDF:
-    # A landscape invitation card, 180×90 mm. One ticket per file.
-    pdf = FPDF(orientation="L", unit="mm", format=(90, 180))
+    pdf = FPDF(orientation="P", unit="mm", format=(_PAGE_W, _PAGE_H))
     pdf.set_auto_page_break(False)
-    pdf.add_font(_FONT, "", str(_FONT_DIR / "NotoSans-Regular.ttf"))
-    pdf.add_font(_FONT, "B", str(_FONT_DIR / "NotoSans-Bold.ttf"))
+    pdf.set_margins(0, 0, 0)
+    pdf.add_font(_FONT, "", str(_FONT_DIR / "Montserrat-Regular.ttf"))
+    pdf.add_font(_FONT, "B", str(_FONT_DIR / "Montserrat-Bold.ttf"))
     return pdf
 
 
-def render_ticket_pdf(recipient_name: str, seat: Seat, ticket: Ticket) -> bytes:
-    """A single VIP invitation ticket as PDF bytes: recipient, seat, and QR.
+def _qr_png(data: str, color: tuple[int, int, int], box: int = 12, border: int = 2) -> bytes:
+    """A QR as an RGBA PNG: ``color`` modules on a fully transparent background, so
+    it sits on the ticket artwork with no white box behind it."""
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,
+                       box_size=box, border=border)
+    qr.add_data(data)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()          # includes the quiet-zone border
+    side = len(matrix) * box
+    img = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    fill = (*color, 255)
+    for r, row in enumerate(matrix):
+        for c, on in enumerate(row):
+            if on:
+                draw.rectangle([c * box, r * box, (c + 1) * box - 1, (r + 1) * box - 1], fill=fill)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
-    The QR encodes the same door check-in URL a paid ticket's QR does, so it scans
-    and redeems identically at the entrance.
+
+def render_ticket_pdf(seat: Seat, ticket: Ticket) -> bytes:
+    """A single VIP invitation ticket as PDF bytes: the designed A5 invitation with
+    this seat filled in after "SỐ GHẾ:" and its check-in QR placed bottom-right.
+
+    Deliberately carries no recipient name, so the ticket is bearer/transferable —
+    whoever holds it can be admitted. The QR encodes the same door check-in URL a
+    paid ticket's QR does, so it scans and redeems identically at the entrance.
     """
     pdf = _new_pdf()
     pdf.add_page()
 
-    # Card outline + the perforation line before the QR stub.
-    stub_x = 130.0
-    pdf.set_draw_color(*_HAIRLINE)
-    pdf.rect(4, 4, 172, 82)
-    pdf.line(stub_x, 4, stub_x, 86)
+    # The designed invitation, full-bleed.
+    pdf.image(str(_BG), x=0, y=0, w=_PAGE_W, h=_PAGE_H)
 
-    left = 12.0
+    # Seat, sitting on the template's "SỐ GHẾ:" baseline. Upper-cased to match the
+    # design's all-caps line; pdf.text places by the baseline, for exact alignment.
+    seat_text = f"{seat.section} · {seat.row_label}{seat.seat_number}".upper()
+    pdf.set_font(_FONT, "", _SEAT_PT)
+    pdf.set_text_color(*_NAVY)
+    pdf.text(_SEAT_X, _SEAT_BASELINE_Y, seat_text)
 
-    def text_at(x, y, s, size, style="", color=_INK):
-        pdf.set_xy(x, y)
-        pdf.set_font(_FONT, style, size)
-        pdf.set_text_color(*color)
-        pdf.cell(0, size / 2.2, s)
-
-    text_at(left, 11, "NẮNG HOÀNG HÔN · ĐÊM NHẠC GÂY QUỸ TỪ THIỆN", 8, "B", _ACCENT)
-    text_at(left, 17, "Sông Trời", 30, "B", _INK)
-
-    # "VÉ MỜI" pill.
-    pdf.set_xy(left, 34)
-    pdf.set_font(_FONT, "B", 9)
-    pdf.set_text_color(*_ACCENT)
-    pdf.set_draw_color(*_ACCENT)
-    pdf.cell(26, 7, "VÉ MỜI", border=1, align="C")
-
-    text_at(left, 46, "Vị trí", 8, "", _MUTED)
-    text_at(left, 50, seat.label, 13, "B", _INK)
-
-    text_at(left, 61, f"Kính mời: {recipient_name}", 12, "", _INK)
-
-    text_at(left, 77, f"MÃ · {ticket.ticket_code}", 7, "", _MUTED)
-    text_at(left, 81, "22.08.2026 · Học viện Âm nhạc Quốc gia Việt Nam", 7, "", _MUTED)
-
-    # QR stub.
-    png = tickets_svc.qr_png_bytes(ticket.qr_token)
-    pdf.image(io.BytesIO(png), x=stub_x + 8, y=16, w=38, h=38)
-    pdf.set_xy(stub_x, 57)
-    pdf.set_font(_FONT, "", 7)
-    pdf.set_text_color(*_MUTED)
-    pdf.cell(46, 4, "Quét mã tại cửa vào", align="C")
-    pdf.set_xy(stub_x, 62)
-    pdf.set_font(_FONT, "B", 10)
-    pdf.set_text_color(*_INK)
-    pdf.cell(46, 5, f"{seat.row_label} · {seat.seat_number}", align="C")
+    # Transparent, navy check-in QR, low in the bottom-right corner so its centre
+    # lines up with the seat row (~192mm) while keeping a small bottom margin.
+    qr = _qr_png(tickets_svc.checkin_url(ticket.qr_token), _NAVY)
+    qr_w = 30.0
+    qr_x = _PAGE_W - qr_w - 10      # right margin ~10mm, tucked toward the corner
+    qr_y = _SEAT_BASELINE_Y - qr_w / 2 - 2.5   # centre ≈ 192mm
+    pdf.image(io.BytesIO(qr), x=qr_x, y=qr_y, w=qr_w, h=qr_w)
 
     return bytes(pdf.output())
 
@@ -148,16 +156,17 @@ def _existing_comp_ticket(db: Session, seat_id: int) -> Ticket | None:
     ).scalars().first()
 
 
-def export_seat(db: Session, seat_id: int, recipient_name: str) -> VipTicket:
+def export_seat(db: Session, seat_id: int, recipient_name: str = "") -> VipTicket:
     """Generate and store a VIP ticket PDF for one seat, then record it.
 
     Mints the comp ticket (booking the seat) if it doesn't have one yet, renders
     the PDF into the depot, and creates the ``VipTicket`` row that marks the seat
     exported. Raises :class:`AlreadyExported` if the seat already has a VIP ticket.
+
+    ``recipient_name`` is optional and for the organisers' own tracking only — it is
+    never printed on the ticket, which is intentionally bearer/transferable.
     """
     recipient_name = (recipient_name or "").strip()
-    if not recipient_name:
-        raise NotExportable("Thiếu tên người nhận.")
 
     if db.execute(
         select(VipTicket.id).where(VipTicket.seat_id == seat_id)
@@ -168,7 +177,8 @@ def export_seat(db: Session, seat_id: int, recipient_name: str) -> VipTicket:
     if ticket is None:
         # Books the seat and mints one comp Ticket; no email (hand-delivered).
         order = orders_svc.create_comp_order(
-            db, seat_ids=[seat_id], guest_name=recipient_name, send_email=False
+            db, seat_ids=[seat_id], guest_name=recipient_name or "Vé mời",
+            send_email=False,
         )
         ticket = db.execute(
             select(Ticket)
@@ -176,7 +186,7 @@ def export_seat(db: Session, seat_id: int, recipient_name: str) -> VipTicket:
             .where(Ticket.order_id == order.id)
         ).scalars().one()
 
-    pdf_bytes = render_ticket_pdf(recipient_name, ticket.seat, ticket)
+    pdf_bytes = render_ticket_pdf(ticket.seat, ticket)
     filename = f"seat{seat_id}-{secrets.token_hex(4)}.pdf"
     (_depot() / filename).write_bytes(pdf_bytes)
 

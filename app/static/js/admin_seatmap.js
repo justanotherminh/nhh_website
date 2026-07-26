@@ -213,14 +213,10 @@
     // Export: generate + store a PDF per selected seat, then go to the depot page.
     exportBtn?.addEventListener("click", async () => {
       if (!selected.size) return;
+      // Names are optional (for the organisers' records only — never on the ticket).
       const tickets = [...selected.values()].map((e) => ({
         seat_id: e.seat.id, name: (e.name || "").trim(),
       }));
-      const missing = tickets.filter((t) => !t.name).length;
-      if (missing) {
-        setStatus(`Vui lòng nhập tên người nhận cho ${missing} ghế còn thiếu.`, true);
-        return;
-      }
       exportBtn.disabled = true;
       setStatus("Đang tạo vé…");
       try {
@@ -271,7 +267,7 @@
       const input = document.createElement("input");
       input.type = "text";
       input.className = "vip-pick__name";
-      input.placeholder = "Tên người nhận";
+      input.placeholder = "Tên người nhận (không bắt buộc)";
       input.value = entry.name || "";
       input.addEventListener("input", () => { entry.name = input.value; });
       li.appendChild(label);
