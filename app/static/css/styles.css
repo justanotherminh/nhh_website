@@ -62,8 +62,34 @@ body {
   background: rgba(31, 111, 196, .14);
   cursor: default;
 }
-body.home .lang-switch { color: #f3ece0; }
-body.home .site-header nav a.lang-switch__opt.is-active { background: rgba(255, 255, 255, .22); }
+/* Over the hero the toggle lands on near-white watercolour. Measured behind the
+   nav, the photo is ~#fdfdfb at every viewport size and the overlay's cyan wash
+   lifts it to ~#c5eef9 — so the old cream-on-cream pill scored 1.05:1 against its
+   own backdrop, i.e. invisible. A drop-shadow (what the icons beside it use) can
+   carry a solid 24px glyph but not a hairline border and 12px letters, so the home
+   toggle gets a frosted dark backing instead — the same material idiom as .btn.
+   Measured: pill 5.7:1 against the hero, inactive label 5.1:1 on the pill. */
+body.home .lang-switch {
+  color: #fdf8f0;
+  background: rgba(12, 28, 52, .7);
+  border-color: rgba(255, 255, 255, .45);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+          backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 2px 10px rgba(8, 20, 45, .28);
+}
+/* Both labels sit on the dark pill now, so the inactive one can afford to fade
+   less than it does on the white header and stay readable. */
+body.home .site-header nav a.lang-switch__opt { opacity: .82; }
+body.home .site-header nav a.lang-switch__opt:hover { opacity: 1; }
+/* The selected option inverts to a filled cream segment rather than the light
+   tint used on the white header: tinting *lighter* on a dark pill would have made
+   the active label the harder of the two to read. Filled reads as selected at a
+   glance and scores 13.7:1. */
+body.home .site-header nav a.lang-switch__opt.is-active {
+  opacity: 1;
+  background: #f6efe3;
+  color: #16233c;
+}
 .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
 .container.wide { max-width: 1700px; }
 .hero h1 { font-size: 2rem; margin-bottom: .25rem; }
