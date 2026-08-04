@@ -28,6 +28,7 @@ from app.services import announcements as announce_svc
 from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
+from app.services import refunds as refunds_svc
 from app.services import vip as vip_svc
 from app.templates import templates
 from scripts.import_vip_seats import reserved_seat_ids
@@ -88,7 +89,12 @@ def dashboard(
             .group_by(Order.status)
         ).all()
     }
-    revenue_paid = order_stats.get("paid", {}).get("sum", 0)
+    # Revenue nets off refunds that are still sitting inside the paid total (see
+    # refunds.refunded_on_live_orders — fully refunded orders have already left it).
+    gross_paid = order_stats.get("paid", {}).get("sum", 0)
+    refunded_live = refunds_svc.refunded_on_live_orders(db)
+    revenue_paid = gross_paid - refunded_live
+    refunded_total = refunds_svc.refunded_total(db)
 
     # Invitations issued = seats booked via a comp order.
     comps_issued = db.execute(
@@ -147,6 +153,7 @@ def dashboard(
             "free_now": free_now,
             "total_seats": sum(seat_counts.values()),
             "revenue_paid": revenue_paid,
+            "refunded_total": refunded_total,
             "blocked_pool": blocked_pool,
             "comps_issued": comps_issued,
             "order_stats": order_stats,
@@ -177,6 +184,138 @@ def release_seat(seat_id: int, db: Session = Depends(get_db)):
     )
     db.commit()
     return RedirectResponse("/admin", status_code=303)
+
+
+# ---------------------------------------------------------------- refunds
+# payOS cannot refund, so the money is transferred back by hand and this screen
+# only reconciles the database afterwards. It is per-seat: an order can hold up
+# to eight seats and a buyer may hand back only some of them.
+@router.get("/orders/{order_code}", response_class=HTMLResponse)
+def order_detail(
+    order_code: int, request: Request, db: Session = Depends(get_db)
+) -> HTMLResponse:
+    order = refunds_svc.refundable_order(db, order_code)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+
+    done = refunds_svc.refunded_seat_ids(db, order.id)
+    ticket_by_seat = {t.seat_id: t for t in order.tickets}
+    seats = []
+    for it in sorted(order.items, key=lambda i: i.seat.label):
+        t = ticket_by_seat.get(it.seat_id)
+        seats.append({
+            "seat_id": it.seat_id,
+            "label": it.seat.label,
+            "price": it.price_vnd,
+            "status": it.seat.status,
+            "refunded": it.seat_id in done,
+            "checked_in": t.checked_in_at is not None if t else False,
+            "checked_in_at": (
+                t.checked_in_at.astimezone(_HANOI).strftime("%H:%M %d/%m/%Y")
+                if t and t.checked_in_at else ""
+            ),
+        })
+    return templates.TemplateResponse(
+        request,
+        "admin_order.html",
+        {
+            "app_name": settings.app_name,
+            "order": order,
+            "seats": seats,
+            # Formatted here, in Hanoi time, like every other admin timestamp —
+            # created_at is stored UTC and would otherwise print as UTC.
+            "refunds": [
+                {
+                    "when": r.created_at.astimezone(_HANOI).strftime("%H:%M %d/%m/%Y"),
+                    "seat": r.seat.label,
+                    "amount": r.amount_vnd,
+                    "by": r.refunded_by,
+                    "note": r.note,
+                }
+                for r in refunds_svc.recent_for_order(db, order.id)
+            ],
+            "refunded_sum": sum(s["price"] for s in seats if s["refunded"]),
+            "live_sum": sum(s["price"] for s in seats if not s["refunded"]),
+            "notice": request.query_params.get("notice"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.get("/refunds", response_class=HTMLResponse)
+def refunds_ledger(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    """Every refund, in one table — what gets reconciled against the bank.
+
+    The per-order page shows only that order's history; this is the whole book.
+    """
+    rows = refunds_svc.recent(db)
+    total_rows = refunds_svc.count(db)
+    return templates.TemplateResponse(
+        request,
+        "admin_refunds.html",
+        {
+            "app_name": settings.app_name,
+            "refunds": [
+                {
+                    "when": r.created_at.astimezone(_HANOI).strftime("%H:%M %d/%m/%Y"),
+                    "order_code": r.order.order_code,
+                    "buyer": r.order.buyer_name,
+                    "seat": r.seat.label,
+                    "amount": r.amount_vnd,
+                    "by": r.refunded_by,
+                    "note": r.note,
+                }
+                for r in rows
+            ],
+            "total_amount": refunds_svc.refunded_total(db),
+            "total_rows": total_rows,
+            # True when the cap hid some rows, so the page can say so out loud.
+            "truncated": total_rows > len(rows),
+        },
+    )
+
+
+@router.post("/orders/{order_code}/refund")
+def refund_seat(
+    order_code: int,
+    seat_id: int = Form(...),
+    note: str = Form(""),
+    confirm_transferred: str = Form(""),
+    operator: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Refund one seat. The money is NOT moved here — see services/refunds.py."""
+    from urllib.parse import quote
+
+    # The manager must tick "I have already transferred the money". Enforced here
+    # and not only in the form: an HTML `required` attribute is trivially skipped,
+    # and this is the one control standing between a voided ticket and a buyer who
+    # was never actually paid back.
+    if not confirm_transferred:
+        return RedirectResponse(
+            f"/admin/orders/{order_code}?error="
+            + quote("Cần tích xác nhận đã chuyển khoản trả khách trước khi hoàn ghế."),
+            status_code=303,
+        )
+
+    try:
+        refund = refunds_svc.refund_seat(
+            db,
+            order_code=order_code,
+            seat_id=seat_id,
+            operator=operator,
+            note=note,
+        )
+    except refunds_svc.RefundError as exc:
+        return RedirectResponse(
+            f"/admin/orders/{order_code}?error={quote(str(exc))}", status_code=303
+        )
+    amount = f"{refund.amount_vnd:,}".replace(",", ".")
+    return RedirectResponse(
+        f"/admin/orders/{order_code}?notice="
+        + quote(f"Đã hoàn {amount} đ — ghế được mở bán lại."),
+        status_code=303,
+    )
 
 
 @router.post("/sweep")

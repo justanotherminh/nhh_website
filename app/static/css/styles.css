@@ -638,6 +638,9 @@ body.checkin--ready   { background: #1b3a6b; }
 body.checkin--valid   { background: #12813f; }
 body.checkin--used    { background: #b26a00; }
 body.checkin--invalid { background: #b02020; }
+/* Refunded: red like invalid (do not admit), but purple-shifted so a volunteer
+   can tell "returned ticket, send them to the desk" from "this QR is fake". */
+body.checkin--refunded { background: #7b2453; }
 .checkin-result { text-align: center; padding: 2rem 1rem 3rem; }
 .checkin-badge {
   width: 128px; height: 128px; margin: 1.5rem auto 1rem;
@@ -738,9 +741,29 @@ body.checkin--invalid { background: #b02020; }
 .status-cancelled { background: #eee; color: #888; }
 .status-expired { background: #eee; color: #888; }
 .status-comp { background: #e3e0f5; color: #4b3f8a; }
+.status-refunded { background: #f3d9e6; color: #7b2453; }
+.status-used { background: #fdf0d0; color: #8a6100; }
 .status-exported { background: #bfe3cc; color: #1c6b34; }
 .status-sent { background: #bcd4f0; color: #21507f; }
 .link-btn { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+/* Refunding is irreversible and follows a real bank transfer, so its control is
+   marked as consequential rather than looking like every other admin link. */
+.link-btn--danger { color: #a12; font-weight: 600; }
+.refund-amount { color: #a12; }
+.row-refunded > td { opacity: .6; }
+.refund-warning { border-left: 3px solid #e0b4b4; padding-left: .7rem; margin: .4rem 0 1rem; }
+.refund-form { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
+.refund-form input[type="text"] {
+  flex: 1 1 11rem; min-width: 8rem; padding: .3rem .5rem;
+  border: 1px solid #d8d5d0; border-radius: 6px; font: inherit; font-size: .85rem;
+}
+/* The "I already transferred the money" attestation. Given its own line and
+   weight so it can't be skimmed past like the secondary retire option. */
+.refund-confirm {
+  flex: 1 0 100%; display: flex; align-items: center; gap: .4rem;
+  font-size: .85rem; color: #a12;
+}
+.refund-confirm strong { white-space: nowrap; }
 
 /* ---- admin images ---- */
 .img-upload { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin: .5rem 0 1.6rem; }

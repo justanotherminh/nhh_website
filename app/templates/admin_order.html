@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Đơn {{ order.order_code }} — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Đơn {{ order.order_code }}</h1>
+    <div class="admin-actions">
+      <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+    </div>
+  </div>
+
+  {% if notice %}<p class="flash flash-ok">{{ notice }}</p>{% endif %}
+  {% if error %}<p class="flash flash-err">{{ error }}</p>{% endif %}
+
+  <table class="admin-table">
+    <tbody>
+      <tr><th>Người mua</th><td>{{ order.buyer_name }}</td></tr>
+      <tr><th>Liên hệ</th><td>{{ order.email }} · {{ order.phone }}</td></tr>
+      <tr><th>Trạng thái</th><td><span class="status status-{{ order.status }}">{{ order.status }}</span></td></tr>
+      <tr><th>Đã thu</th><td>{{ "{:,.0f}".format(order.amount_vnd).replace(",", ".") }} đ
+        {%- if order.discount_percent %} <span class="muted small">(đã giảm {{ order.discount_percent }}%)</span>{% endif %}</td></tr>
+      {% if refunded_sum %}
+      <tr><th>Đã hoàn</th><td class="refund-amount">−{{ "{:,.0f}".format(refunded_sum).replace(",", ".") }} đ</td></tr>
+      <tr><th>Còn lại</th><td><strong>{{ "{:,.0f}".format(live_sum).replace(",", ".") }} đ</strong></td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {% if order.kind == "sale" and order.status in ("paid", "refunded") %}
+  <h2>Hoàn tiền theo ghế</h2>
+  <p class="muted small refund-warning">
+    Hệ thống <strong>không</strong> chuyển tiền. payOS không hỗ trợ hoàn tiền — hãy
+    chuyển khoản trả khách trước, rồi mới bấm hoàn ở đây để cập nhật dữ liệu:
+    mã QR của ghế sẽ mất hiệu lực và ghế được mở bán lại.
+  </p>
+  {% endif %}
+
+  <table class="admin-table">
+    <thead>
+      <tr><th>Ghế</th><th>Giá</th><th>Tình trạng</th><th>Hoàn tiền</th></tr>
+    </thead>
+    <tbody>
+      {% for s in seats %}
+      <tr{% if s.refunded %} class="row-refunded"{% endif %}>
+        <td>{{ s.label }}</td>
+        <td>{{ "{:,.0f}".format(s.price).replace(",", ".") }} đ</td>
+        <td>
+          {% if s.refunded %}
+            <span class="status status-refunded">đã hoàn</span>
+            <span class="muted small">ghế đã mở bán lại</span>
+          {% elif s.checked_in %}
+            <span class="status status-used">đã vào cửa {{ s.checked_in_at }}</span>
+          {% else %}
+            <span class="muted small">{{ s.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if s.refunded %}
+            <span class="muted small">—</span>
+          {% elif s.checked_in %}
+            {# Deliberately no button: an attendee who already walked in is a
+               judgement call for a human, not a one-click action. #}
+            <span class="muted small">Khách đã vào cửa — không hoàn tự động.</span>
+          {% elif order.kind != "sale" or order.status != "paid" %}
+            <span class="muted small">—</span>
+          {% else %}
+          <form method="post" action="/admin/orders/{{ order.order_code }}/refund"
+                class="refund-form">
+            <input type="hidden" name="seat_id" value="{{ s.seat_id }}">
+            {# The attestation. `required` stops the honest mistake in the browser;
+               the server re-checks it, because `required` is trivially bypassed and
+               this is the only thing standing between voiding a ticket and a buyer
+               who never got their money back. #}
+            <label class="refund-confirm">
+              <input type="checkbox" name="confirm_transferred" value="1" required>
+              Tôi đã chuyển khoản
+              <strong>{{ "{:,.0f}".format(s.price).replace(",", ".") }} đ</strong>
+              trả khách
+            </label>
+            <input type="text" name="note" maxlength="300" placeholder="Mã giao dịch / lý do">
+            <button type="submit" class="link-btn link-btn--danger">Hoàn ghế này</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if refunds %}
+  <h2>Lịch sử hoàn tiền</h2>
+  <table class="admin-table">
+    <thead><tr><th>Thời điểm</th><th>Ghế</th><th>Số tiền</th><th>Người thực hiện</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      {% for r in refunds %}
+      <tr>
+        <td class="small">{{ r.when }}</td>
+        <td>{{ r.seat }}</td>
+        <td>{{ "{:,.0f}".format(r.amount).replace(",", ".") }} đ</td>
+        <td>{{ r.by or "—" }}</td>
+        <td class="small">{{ r.note or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

@@ -17,6 +17,13 @@
     <h1>ĐÃ CHECK-IN</h1>
     <p class="checkin-seat">{{ seat.label }}</p>
     <p class="checkin-when">Đã vào cửa lúc {{ checked_at }}</p>
+  {% elif result == "refunded" %}
+    {# A real ticket whose seat was refunded — say so plainly, so the volunteer
+       sends the holder to the desk instead of suspecting a forgery. #}
+    <div class="checkin-badge">✕</div>
+    <h1>VÉ ĐÃ HOÀN</h1>
+    <p class="checkin-seat">{{ seat.label }}</p>
+    <p class="checkin-when">Ghế này đã được hoàn tiền — vé không còn giá trị.</p>
   {% else %}
     <div class="checkin-badge">✕</div>
     <h1>KHÔNG HỢP LỆ</h1>
