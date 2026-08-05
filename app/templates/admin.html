@@ -10,6 +10,7 @@
       <a href="/admin/early-bird" class="btn small-btn">Ưu đãi</a>
       <a href="/admin/invitations" class="btn small-btn">Vé mời</a>
       <a href="/admin/announcements" class="btn small-btn">Gửi thông báo</a>
+      <a href="/admin/refunds" class="btn small-btn">Hoàn tiền</a>
       <form method="post" action="/admin/sweep" class="inline">
         <button type="submit" class="btn btn-secondary small-btn">Dọn đơn hết hạn</button>
       </form>
@@ -25,8 +26,14 @@
     <div class="card"><span class="card-num">{{ total_seats }}</span><span class="card-label">Tổng số ghế</span></div>
     <div class="card card-accent">
       <span class="card-num">{{ "{:,.0f}".format(revenue_paid).replace(",", ".") }} đ</span>
-      <span class="card-label">Doanh thu (đã thanh toán)</span>
+      <span class="card-label">Doanh thu (đã trừ hoàn)</span>
     </div>
+    {% if refunded_total %}
+    <div class="card">
+      <span class="card-num refund-amount">−{{ "{:,.0f}".format(refunded_total).replace(",", ".") }} đ</span>
+      <span class="card-label">Đã hoàn tiền</span>
+    </div>
+    {% endif %}
   </div>
 
   <h2>Theo hạng vé</h2>
@@ -65,7 +72,7 @@
     <tbody>
       {% for o in orders %}
       <tr>
-        <td>{{ o.order_code }}{% if o.kind == "comp" %} <span class="status status-comp">mời</span>{% endif %}</td>
+        <td><a href="/admin/orders/{{ o.order_code }}">{{ o.order_code }}</a>{% if o.kind == "comp" %} <span class="status status-comp">mời</span>{% endif %}</td>
         <td>{{ o.buyer_name }}</td>
         <td class="small">{{ o.email }}<br>{{ o.phone }}</td>
         <td>{{ o.items|length }}</td>

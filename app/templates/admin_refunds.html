@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Hoàn tiền — {{ app_name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="admin">
+  <div class="admin-head">
+    <h1>Hoàn tiền</h1>
+    <div class="admin-actions">
+      <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+    </div>
+  </div>
+
+  <p class="muted small refund-warning">
+    Đây là sổ đối chiếu: mỗi dòng là một ghế đã hoàn <strong>trong hệ thống</strong>
+    và đã được mở bán lại. payOS không hỗ trợ hoàn tiền nên tiền do người phụ trách
+    quỹ chuyển khoản thủ công — hãy đối chiếu bảng này với sao kê ngân hàng.
+  </p>
+
+  <div class="admin-cards">
+    <div class="card card-accent">
+      {# No .refund-amount here: the accent card sets its own light-on-navy ink,
+         which outranks it — red would be unreadable on that background anyway. #}
+      <span class="card-num">{{ "{:,.0f}".format(total_amount).replace(",", ".") }} đ</span>
+      <span class="card-label">Tổng đã hoàn</span>
+    </div>
+    <div class="card">
+      <span class="card-num">{{ total_rows }}</span>
+      <span class="card-label">Số ghế đã hoàn</span>
+    </div>
+  </div>
+
+  {% if truncated %}
+  <p class="flash flash-err">
+    Chỉ hiển thị {{ refunds|length }} lượt hoàn gần nhất trong tổng số {{ total_rows }}.
+  </p>
+  {% endif %}
+
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th>Thời điểm</th><th>Đơn</th><th>Người mua</th><th>Ghế</th>
+        <th>Số tiền</th><th>Người thực hiện</th><th>Ghi chú</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in refunds %}
+      <tr>
+        <td class="small">{{ r.when }}</td>
+        <td><a href="/admin/orders/{{ r.order_code }}">{{ r.order_code }}</a></td>
+        <td>{{ r.buyer }}</td>
+        <td>{{ r.seat }}</td>
+        <td class="refund-amount">{{ "{:,.0f}".format(r.amount).replace(",", ".") }} đ</td>
+        <td>{{ r.by or "—" }}</td>
+        <td class="small">{{ r.note or "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">Chưa có lượt hoàn tiền nào.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

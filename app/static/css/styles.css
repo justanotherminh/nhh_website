@@ -62,8 +62,34 @@ body {
   background: rgba(31, 111, 196, .14);
   cursor: default;
 }
-body.home .lang-switch { color: #f3ece0; }
-body.home .site-header nav a.lang-switch__opt.is-active { background: rgba(255, 255, 255, .22); }
+/* Over the hero the toggle lands on near-white watercolour. Measured behind the
+   nav, the photo is ~#fdfdfb at every viewport size and the overlay's cyan wash
+   lifts it to ~#c5eef9 — so the old cream-on-cream pill scored 1.05:1 against its
+   own backdrop, i.e. invisible. A drop-shadow (what the icons beside it use) can
+   carry a solid 24px glyph but not a hairline border and 12px letters, so the home
+   toggle gets a frosted dark backing instead — the same material idiom as .btn.
+   Measured: pill 5.7:1 against the hero, inactive label 5.1:1 on the pill. */
+body.home .lang-switch {
+  color: #fdf8f0;
+  background: rgba(12, 28, 52, .7);
+  border-color: rgba(255, 255, 255, .45);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+          backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: 0 2px 10px rgba(8, 20, 45, .28);
+}
+/* Both labels sit on the dark pill now, so the inactive one can afford to fade
+   less than it does on the white header and stay readable. */
+body.home .site-header nav a.lang-switch__opt { opacity: .82; }
+body.home .site-header nav a.lang-switch__opt:hover { opacity: 1; }
+/* The selected option inverts to a filled cream segment rather than the light
+   tint used on the white header: tinting *lighter* on a dark pill would have made
+   the active label the harder of the two to read. Filled reads as selected at a
+   glance and scores 13.7:1. */
+body.home .site-header nav a.lang-switch__opt.is-active {
+  opacity: 1;
+  background: #f6efe3;
+  color: #16233c;
+}
 .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
 .container.wide { max-width: 1700px; }
 .hero h1 { font-size: 2rem; margin-bottom: .25rem; }
@@ -612,6 +638,9 @@ body.checkin--ready   { background: #1b3a6b; }
 body.checkin--valid   { background: #12813f; }
 body.checkin--used    { background: #b26a00; }
 body.checkin--invalid { background: #b02020; }
+/* Refunded: red like invalid (do not admit), but purple-shifted so a volunteer
+   can tell "returned ticket, send them to the desk" from "this QR is fake". */
+body.checkin--refunded { background: #7b2453; }
 .checkin-result { text-align: center; padding: 2rem 1rem 3rem; }
 .checkin-badge {
   width: 128px; height: 128px; margin: 1.5rem auto 1rem;
@@ -712,9 +741,29 @@ body.checkin--invalid { background: #b02020; }
 .status-cancelled { background: #eee; color: #888; }
 .status-expired { background: #eee; color: #888; }
 .status-comp { background: #e3e0f5; color: #4b3f8a; }
+.status-refunded { background: #f3d9e6; color: #7b2453; }
+.status-used { background: #fdf0d0; color: #8a6100; }
 .status-exported { background: #bfe3cc; color: #1c6b34; }
 .status-sent { background: #bcd4f0; color: #21507f; }
 .link-btn { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+/* Refunding is irreversible and follows a real bank transfer, so its control is
+   marked as consequential rather than looking like every other admin link. */
+.link-btn--danger { color: #a12; font-weight: 600; }
+.refund-amount { color: #a12; }
+.row-refunded > td { opacity: .6; }
+.refund-warning { border-left: 3px solid #e0b4b4; padding-left: .7rem; margin: .4rem 0 1rem; }
+.refund-form { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
+.refund-form input[type="text"] {
+  flex: 1 1 11rem; min-width: 8rem; padding: .3rem .5rem;
+  border: 1px solid #d8d5d0; border-radius: 6px; font: inherit; font-size: .85rem;
+}
+/* The "I already transferred the money" attestation. Given its own line and
+   weight so it can't be skimmed past like the secondary retire option. */
+.refund-confirm {
+  flex: 1 0 100%; display: flex; align-items: center; gap: .4rem;
+  font-size: .85rem; color: #a12;
+}
+.refund-confirm strong { white-space: nowrap; }
 
 /* ---- admin images ---- */
 .img-upload { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; margin: .5rem 0 1.6rem; }

@@ -135,9 +135,59 @@ class Ticket(Base):
     checked_in_at: Mapped[dt.datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Set when the seat is refunded. The row is kept rather than deleted so the
+    # check-in history survives and the door can say "refunded" instead of the
+    # same "invalid" it shows a forged QR. A voided ticket never admits anyone.
+    voided_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     order: Mapped[Order] = relationship(back_populates="tickets")
     seat: Mapped[Seat] = relationship()
+
+
+class Refund(Base):
+    """One refunded seat: the ledger the fund managers reconcile against the bank.
+
+    payOS has no refund API, so the money moves by hand — a human transfers it back
+    from the organisers' own banking. This row records only what happened *in the
+    database* so the two can be reconciled afterwards: which seat of which order was
+    given back, for how much, by whom, and where the seat went.
+
+    Refunds are per-seat, not per-order, because an order can hold up to eight seats
+    and a buyer may hand back only some of them. ``amount_vnd`` is copied from the
+    seat's ``OrderItem.price_vnd``, which is what that seat was actually charged
+    (early-bird discount included) — never the tier's list price.
+
+    The (order_id, seat_id) uniqueness is what makes refunding idempotent: a
+    double-submitted form or a second manager clicking the same button hits the
+    constraint instead of paying someone back twice.
+    """
+    __tablename__ = "refunds"
+    __table_args__ = (
+        UniqueConstraint("order_id", "seat_id", name="uq_refund_order_seat"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), nullable=False)
+    seat_id: Mapped[int] = mapped_column(ForeignKey("seats.id"), nullable=False)
+    # The ticket voided by this refund. Nullable only so the ledger survives if a
+    # ticket row is ever removed by other means; normally always set.
+    ticket_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tickets.id"), nullable=True
+    )
+    amount_vnd: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Admin username from HTTP Basic auth — who pressed the button.
+    refunded_by: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    # Free text: bank transfer reference, reason, whatever the managers need later.
+    note: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    order: Mapped[Order] = relationship()
+    seat: Mapped[Seat] = relationship()
+    ticket: Mapped[Ticket | None] = relationship()
 
 
 class VipTicket(Base):

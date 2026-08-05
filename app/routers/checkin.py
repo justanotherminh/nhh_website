@@ -63,10 +63,15 @@ def checkin_home(request: Request) -> HTMLResponse:
 @router.get("/{qr_token}", response_class=HTMLResponse)
 def check_in(qr_token: str, request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
     # Atomically claim the check-in: only the FIRST scan flips NULL -> now(), so two
-    # volunteers scanning at once can't both admit the same ticket.
+    # volunteers scanning at once can't both admit the same ticket. A refunded
+    # (voided) ticket matches nothing here, so it can never be admitted.
     first = db.execute(
         update(Ticket)
-        .where(Ticket.qr_token == qr_token, Ticket.checked_in_at.is_(None))
+        .where(
+            Ticket.qr_token == qr_token,
+            Ticket.checked_in_at.is_(None),
+            Ticket.voided_at.is_(None),
+        )
         .values(checked_in_at=func.now())
         .returning(Ticket.id)
     ).first()
@@ -75,6 +80,10 @@ def check_in(qr_token: str, request: Request, db: Session = Depends(get_db)) -> 
     ticket = _load(db, qr_token)
     if ticket is None:
         result = "invalid"          # unknown / fake token
+    elif ticket.voided_at is not None:
+        # The seat was refunded. Distinct from 'invalid' so the volunteer can tell
+        # a returned ticket from a forgery and send the holder to the desk.
+        result = "refunded"
     elif first is not None:
         result = "valid"            # this scan just admitted them
     else:
@@ -97,5 +106,7 @@ def check_in(qr_token: str, request: Request, db: Session = Depends(get_db)) -> 
             "order": ticket.order if ticket else None,
             "checked_at": checked_at,
         },
-        status_code=200 if result == "valid" else (404 if result == "invalid" else 409),
+        # 410 Gone for a refunded ticket: it was real and is deliberately no longer
+        # valid — distinct from the 404 a forged token gets.
+        status_code={"valid": 200, "invalid": 404, "refunded": 410}.get(result, 409),
     )
