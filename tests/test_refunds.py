@@ -95,6 +95,67 @@ def _refund(code, seat_id, **kw):
         db.close()
 
 
+# --------------------------------------------------------------- resale
+
+def test_reselling_a_refunded_seat_mints_a_fresh_qr_and_leaves_the_old_one_dead(
+    paid_order, checkin_creds
+):
+    """The refunded buyer keeps the e-ticket email we already sent them.
+
+    So once the seat is sold again there are two QR codes in the world for one
+    seat, and exactly one of them must open the door. Tokens are minted per
+    ticket (``secrets.token_urlsafe``) and ``tickets.seat_id`` is deliberately
+    not unique, so a seat accumulates one row per sale — but nothing enforces
+    that at the type level, hence this test.
+    """
+    code, seat_ids = paid_order
+    seat = seat_ids[0]
+
+    db = SessionLocal()
+    old_token = db.execute(
+        select(Ticket.qr_token).where(Ticket.seat_id == seat)
+    ).scalar_one()
+    db.close()
+
+    _refund(code, seat, operator="admin")
+
+    # Someone else buys the freed seat.
+    db = SessionLocal()
+    cart = uuid.uuid4()
+    assert holds.acquire(db, seat, cart, 600)
+    second = orders.create_order_from_holds(
+        db, cart_id=cart, buyer_name="Second Buyer", email="second@x.com",
+        phone="0900000001", extend_seconds=900,
+    )
+    assert orders.mark_order_paid(db, second.order_code)
+    new_token = db.execute(
+        select(Ticket.qr_token)
+        .where(Ticket.seat_id == seat, Ticket.voided_at.is_(None))
+    ).scalar_one()
+    second_id = second.id          # grab it before the session closes
+    db.close()
+
+    assert new_token != old_token          # a genuinely new code, not a reissue
+
+    c = TestClient(app)
+    # The new buyer gets in...
+    assert c.get(f"/checkin/{new_token}", auth=checkin_creds).status_code == 200
+    # ...and the refunded buyer's old email QR still does not, even though the
+    # seat is now legitimately sold and occupied.
+    stale = c.get(f"/checkin/{old_token}", auth=checkin_creds)
+    assert stale.status_code == 410
+    assert "VÉ ĐÃ HOÀN" in stale.text
+
+    db = SessionLocal()
+    try:
+        db.execute(delete(Ticket).where(Ticket.order_id == second_id))
+        db.execute(delete(OrderItem).where(OrderItem.order_id == second_id))
+        db.execute(delete(Order).where(Order.id == second_id))
+        db.commit()
+    finally:
+        db.close()
+
+
 # ------------------------------------------------------------ the happy path
 
 def test_refunding_one_seat_frees_it_voids_its_qr_and_leaves_the_rest(paid_order):
