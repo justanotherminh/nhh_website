@@ -69,20 +69,33 @@ def upgrade() -> None:
             params[f"r{i}"] = row_label
             params[f"n{i}"] = seat_number
             tuples.append(f"(:s{i}, :r{i}, :n{i})")
-        # Only seats actually held back ('blocked') or already issued ('booked').
+        # Two narrowings, both about not inventing state that was never true.
         #
-        # A CSV seat sitting 'available' is, by observable state, on public sale —
-        # someone ran --unblock, or the boot seeder hasn't re-blocked it yet. Marking
-        # it VIP without also blocking it would leave a seat that is simultaneously
-        # buyable and an invitation, which is the one combination nothing else in the
-        # codebase expects. On a normal production database no CSV seat is
-        # 'available' (the old entrypoint re-blocked them every boot), so this
-        # narrowing is a no-op there and insurance everywhere else.
+        # 1. Only seats actually held back ('blocked') or already issued ('booked').
+        #    A CSV seat sitting 'available' is, by observable state, on public sale —
+        #    someone ran --unblock, or the boot seeder hasn't re-blocked it yet.
+        #    Marking it VIP without also blocking it would leave a seat that is
+        #    simultaneously buyable and an invitation, which is the one combination
+        #    nothing else in the codebase expects.
+        #
+        # 2. Not seats a real buyer paid for. A seat can be named in the CSV and yet
+        #    have been sold before it was ever reserved — the seeder skips booked
+        #    seats, so it stayed sold and the CSV entry is vestigial. Marking such a
+        #    seat VIP would offer it for invitation export on the admin map (the
+        #    export itself fails safely, but only with a generic error), would tell a
+        #    manager trying to release it that it was "đã được phát" when in fact a
+        #    customer bought it, and — if that order were later refunded — would leave
+        #    it both on public sale and flagged VIP. Its ticket, check-in and refund
+        #    path are all unaffected either way; it simply isn't an invitation seat.
         result = conn.execute(
             sa.text(
                 "UPDATE seats SET is_vip = true "
                 f"WHERE (section, row_label, seat_number) IN ({', '.join(tuples)}) "
-                "AND status IN ('blocked', 'booked')"
+                "AND status IN ('blocked', 'booked') "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM tickets t JOIN orders o ON o.id = t.order_id"
+                "  WHERE t.seat_id = seats.id AND o.kind = 'sale' AND o.status = 'paid'"
+                ")"
             ),
             params,
         )

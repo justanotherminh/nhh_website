@@ -84,8 +84,17 @@ def main() -> None:
                 print(f"      {k[0]} – {k[1]} – {k[2]}")
         print()
 
+        # Seats a real buyer paid for; the migration skips these (see section 4).
+        sold_ids = set(db.execute(
+            select(Ticket.seat_id).join(Order, Ticket.order_id == Order.id)
+            .where(Order.kind == "sale", Order.status == "paid")
+        ).scalars())
+
         # 1. What the migration will actually mark.
-        will_mark = [s for s in csv_seats if s.status in ("blocked", "booked")]
+        will_mark = [
+            s for s in csv_seats
+            if s.status in ("blocked", "booked") and s.id not in sold_ids
+        ]
         skipped_available = [s for s in csv_seats if s.status == "available"]
         print(f"[1] Will be marked is_vip: {len(will_mark)}")
         print(f"      blocked (not yet issued): {sum(1 for s in will_mark if s.status == 'blocked')}")
@@ -134,17 +143,16 @@ def main() -> None:
         print()
 
         # 4. CSV seats booked by a real sale rather than an invitation.
-        sold_ids = set(db.execute(
-            select(Ticket.seat_id).join(Order, Ticket.order_id == Order.id)
-            .where(Order.kind == "sale", Order.status == "paid")
-        ).scalars())
         csv_sold = [s for s in csv_seats if s.id in sold_ids]
         print(f"[4] CSV seats sold to a real buyer: {len(csv_sold)}")
         if csv_sold:
-            print("    ! These were sold before being reserved. They'll be marked VIP but")
-            print("      are genuinely someone's paid seat — do not issue invitations for them:")
+            print("    These were sold before they were ever reserved, so the CSV entry is")
+            print("    vestigial. The migration SKIPS them — they stay ordinary sold seats,")
+            print("    and the buyer's ticket, check-in and refund path are untouched:")
             for s in csv_sold:
                 print(f"      {s.label}")
+            print("    -> Worth knowing operationally: someone intended these as invitation")
+            print("       seats, so that guest may still need a seat found for them.")
         print()
 
         print("Dashboard note: the 'Ghế giữ cho vé mời' card counts VIP+blocked after")
