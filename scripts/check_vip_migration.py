@@ -4,9 +4,21 @@ The migration that adds ``seats.is_vip`` backfills membership from
 ``scripts/data/vip_reserved_seats.csv``. That is exactly right if production's VIP
 pool still matches the CSV, and this script is how you find out whether it does.
 
-Run it on the server, against production, BEFORE deploying:
+Run it BEFORE bringing the new containers up. ``entrypoint.sh`` applies migrations
+on boot, so a rebuilt container has already migrated by the time you could exec into
+it — the check has to run against the *currently running* (old) container.
 
-    docker compose -f docker-compose.prod.yml exec app python -m scripts.check_vip_migration
+That container doesn't have this file, so pipe it in over stdin. From the repo root
+on the server, after ``git pull``:
+
+    docker compose -f docker-compose.prod.yml exec -T app \
+        python - < scripts/check_vip_migration.py
+
+(``-T`` disables TTY allocation, without which the redirect won't attach.)
+
+Deliberately compatible with a pre-migration database and an older app image: it
+selects explicit columns rather than the Seat entity, so it never references the
+is_vip column it exists to ask about, and it locates the CSV without ``__file__``.
 
 Every section prints either OK or a list of seats needing a decision. Nothing here
 blocks a deploy on its own — it tells you what the migration will and won't pick up.
@@ -21,11 +33,27 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models import Order, Seat, Ticket, VipTicket
 
-CSV_PATH = Path(__file__).resolve().parent / "data" / "vip_reserved_seats.csv"
+_REL = Path("scripts") / "data" / "vip_reserved_seats.csv"
+
+
+def _csv_path() -> Path:
+    """Locate the reserved-seat CSV.
+
+    Normally next to this file. The fallback is relative to the working directory
+    (WORKDIR is /app in the image) so the script still works when it's piped in over
+    stdin, where ``__file__`` isn't defined at all.
+    """
+    try:
+        here = Path(__file__).resolve().parent / "data" / "vip_reserved_seats.csv"
+        if here.is_file():
+            return here
+    except NameError:       # running from stdin
+        pass
+    return _REL
 
 
 def _csv_keys() -> set[tuple[str, str, int]]:
-    with open(CSV_PATH, newline="", encoding="utf-8") as fh:
+    with open(_csv_path(), newline="", encoding="utf-8") as fh:
         return {
             (r["section"], r["row_label"], int(r["seat_number"]))
             for r in csv.DictReader(fh)
@@ -36,7 +64,14 @@ def main() -> None:
     db = SessionLocal()
     try:
         want = _csv_keys()
-        seats = db.execute(select(Seat)).scalars().all()
+        # Explicit columns, never `select(Seat)`: this script's whole purpose is to
+        # run BEFORE the migration, against a database that has no is_vip column.
+        # Selecting the ORM entity would emit it and fail on exactly the databases
+        # we most need to inspect.
+        seats = db.execute(
+            select(Seat.id, Seat.section, Seat.row_label, Seat.seat_number,
+                   Seat.label, Seat.status)
+        ).all()
         by_key = {(s.section, s.row_label, s.seat_number): s for s in seats}
         csv_seats = [by_key[k] for k in want if k in by_key]
 
@@ -81,11 +116,13 @@ def main() -> None:
 
         # 3. Exported invitations whose seat the CSV never listed.
         vip_rows = db.execute(
-            select(VipTicket).join(Seat, VipTicket.seat_id == Seat.id)
-        ).scalars().all()
+            select(VipTicket.pdf_filename, Seat.section, Seat.row_label,
+                   Seat.seat_number, Seat.label)
+            .join(Seat, VipTicket.seat_id == Seat.id)
+        ).all()
         orphan_vip = [
             v for v in vip_rows
-            if (v.seat.section, v.seat.row_label, v.seat.seat_number) not in want
+            if (v.section, v.row_label, v.seat_number) not in want
         ]
         print(f"[3] Generated invitation PDFs: {len(vip_rows)}")
         if orphan_vip:
@@ -93,7 +130,7 @@ def main() -> None:
             print("      scripts/vip_test_ticket.py). They keep working and stay listed on")
             print("      'Vé đã tạo', but won't count as VIP seats:")
             for v in orphan_vip:
-                print(f"      {v.seat.label} -> {v.pdf_filename}")
+                print(f"      {v.label} -> {v.pdf_filename}")
         print()
 
         # 4. CSV seats booked by a real sale rather than an invitation.
