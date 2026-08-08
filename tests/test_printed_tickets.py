@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 
 from app.config import settings
 from app.db import SessionLocal
@@ -57,9 +57,18 @@ def admin_creds(monkeypatch):
 
 @pytest.fixture()
 def as_vip(monkeypatch, blocked_seats, tmp_path):
-    """Treat the throwaway blocked seats as the VIP set, and point the depot at a
-    temp dir so generated PDFs don't touch the real one."""
-    monkeypatch.setattr("app.routers.admin.reserved_seat_ids", lambda db: set(blocked_seats))
+    """Put the throwaway blocked seats in the VIP pool, and point the depot at a
+    temp dir so generated PDFs don't touch the real one.
+
+    Membership is a real column now, so this sets it rather than stubbing the
+    lookup — the export path then runs against the same query production uses.
+    """
+    db = SessionLocal()
+    try:
+        db.execute(update(Seat).where(Seat.id.in_(blocked_seats)).values(is_vip=True))
+        db.commit()
+    finally:
+        db.close()
     monkeypatch.setattr(settings, "vip_depot_dir", str(tmp_path))
     return blocked_seats
 
@@ -141,8 +150,8 @@ def test_export_generates_pdf_and_marks_exported(as_vip, admin_creds, tmp_path):
 
 
 def test_export_rejects_non_vip_seat(blocked_seats, admin_creds, monkeypatch, tmp_path):
-    # No VIP monkeypatch: these seats are not in the VIP set, so export must refuse.
-    monkeypatch.setattr("app.routers.admin.reserved_seat_ids", lambda db: set())
+    # Without the as_vip fixture these seats are blocked but not is_vip, so export
+    # must refuse them — being off public sale is not the same as being an invitation.
     monkeypatch.setattr(settings, "vip_depot_dir", str(tmp_path))
     c = TestClient(app)
     r = c.post("/admin/invitations/export", auth=admin_creds,

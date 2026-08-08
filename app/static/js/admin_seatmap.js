@@ -1,17 +1,35 @@
-// Admin invitation seat map: only VIP-reserved seats are clickable. Select them and
-// "Xuất vé in" opens a printable sheet of their tickets (minting any missing ones).
-// Same SVG render + pan/zoom as the buyer map, but selection is client-side only.
+// Admin seat map, in two modes (set by data-mode on #seatmap):
+//
+//   "export" (default) — the invitations page. Only un-issued VIP seats are
+//       clickable; "Tạo vé PDF" mints their tickets into the depot.
+//   "pool"             — the VIP pool page. Clicking an available seat stages it to
+//       join the pool; clicking an un-issued VIP seat stages it to go back on sale.
+//
+// Both share the SVG render and pan/zoom; only what's selectable and what the
+// action button does differ. Selection is client-side until the button is pressed.
 (function () {
   "use strict";
   const SVGNS = "http://www.w3.org/2000/svg";
   const root = document.getElementById("seatmap");
   if (!root) return;
+  const POOL = (root.dataset.mode || "export") === "pool";
   const panel = document.getElementById("selection");
   const summary = document.getElementById("selection-summary");
-  const exportBtn = document.getElementById("export-btn");
+  // The invitations page calls it #export-btn, the pool page #apply-btn.
+  const actionBtn = document.getElementById("export-btn")
+                 || document.getElementById("apply-btn");
   const statusEl = document.getElementById("export-status");
 
-  const selected = new Map(); // seatId -> { seat, name }
+  const selected = new Map(); // seatId -> { seat, g, name, action }
+
+  // A summary survives the reload that follows a successful pool edit.
+  const CARRY = "vipPoolMsg";
+  const carried = sessionStorage.getItem(CARRY);
+  if (carried) {
+    sessionStorage.removeItem(CARRY);
+    const parsed = JSON.parse(carried);
+    setTimeout(() => setStatus(parsed.msg, parsed.isErr), 0);
+  }
 
   function setStatus(msg, isErr) {
     if (!statusEl) return;
@@ -76,35 +94,65 @@
 
     // ---- seats ----
     const sz = data.seat;
-    const seatReg = new Map(); // <g> -> entry (VIP seats only)
+    const seatReg = new Map(); // <g> -> entry, for the seats this mode can act on
     data.seats.forEach((s) => {
       const tier = tierById[s.tier_id];
       const rank = tier ? tier.rank : 0;
       const g = el("g", { class: "seat-g tier-r" + rank }, svg);
+
       // Three VIP states: unexported (pickable), exported, and sent to the guest.
+      const vipState = s.vip ? s.vip_state : "none";
       let cls = "seat seat-nonvip";
       if (s.vip) {
-        cls = s.vip_state === "sent" ? "seat seat-vip-sent"
-            : s.vip_state === "exported" ? "seat seat-vip-done"
+        cls = vipState === "sent" ? "seat seat-vip-sent"
+            : vipState === "exported" ? "seat seat-vip-done"
             : "seat seat-vip";
-      }
+      } else if (POOL && s.status === "booked") {
+        cls = "seat seat-taken";          // sold: can never join the pool
+      } else if (POOL && s.status === "available" && !s.held) {
+        cls = "seat";                     // keep the tier colour — tier matters
+      }                                   // when choosing which seats to give away
       const rect = el("rect", { x: s.x, y: s.y, width: sz, height: sz, rx: 3, class: cls }, g);
       el("text", { x: s.x + sz / 2, y: s.y + sz / 2, class: "seat-num", "text-anchor": "middle", "dominant-baseline": "central" }, g).textContent = s.num;
-      // Only unexported VIP seats can be selected; exported/sent ones are locked.
-      if (s.vip && s.vip_state === "none") {
+
+      // What, if anything, clicking this seat does in this mode.
+      let action = null;
+      if (!POOL) {
+        if (s.vip && vipState === "none") action = "export";
+      } else if (s.vip && vipState === "none") {
+        action = "release";
+      } else if (!s.vip && s.status === "available" && !s.held) {
+        action = "add";
+      }
+
+      if (action) {
         g.style.cursor = "pointer";
-        el("title", {}, g).textContent = s.label;
-        seatReg.set(g, { seat: s, g, rect });
-      } else if (s.vip) {
-        el("title", {}, g).textContent =
-          s.label + (s.vip_state === "sent" ? " — đã gửi cho khách" : " — đã xuất vé");
+        const hint = action === "add" ? " — thêm vào vé mời"
+                   : action === "release" ? " — trả về bán"
+                   : "";
+        el("title", {}, g).textContent = s.label + hint;
+        seatReg.set(g, { seat: s, g, rect, action });
+      } else {
+        // Say why it's locked, so a manager isn't left clicking a dead seat.
+        const why = vipState === "sent" ? " — đã gửi cho khách"
+                  : vipState === "exported" ? " — đã xuất vé"
+                  : s.status === "booked" ? " — đã bán"
+                  : s.held ? " — khách đang giữ chỗ"
+                  : s.status === "blocked" ? " — đang khóa"
+                  : "";
+        if (s.vip || POOL) el("title", {}, g).textContent = s.label + why;
       }
     });
 
     function toggle(entry) {
-      const { seat, g } = entry;
-      if (selected.has(seat.id)) { selected.delete(seat.id); g.classList.remove("selected"); }
-      else { selected.set(seat.id, { seat, name: "" }); g.classList.add("selected"); }
+      const { seat, g, action } = entry;
+      // The two pool actions get different colours: adding and releasing pull in
+      // opposite directions and a mixed batch is easy to misread otherwise.
+      const cls = action === "release" ? "pick-release"
+                : action === "add" ? "pick-add"
+                : "selected";
+      if (selected.has(seat.id)) { selected.delete(seat.id); g.classList.remove(cls); }
+      else { selected.set(seat.id, { seat, g, name: "", action }); g.classList.add(cls); }
       updatePanel();
     }
 
@@ -210,14 +258,54 @@
     document.getElementById("zoom-out")?.addEventListener("click", () => { const c = center(); zoomAt(c.cx, c.cy, 1 / 1.4); });
     document.getElementById("zoom-reset")?.addEventListener("click", fit);
 
+    // Pool: apply the staged membership changes, then reload so the map redraws
+    // from the server rather than from an optimistic guess.
+    async function applyPool() {
+      const add = [], release = [];
+      selected.forEach((e) => (e.action === "add" ? add : release).push(e.seat.id));
+      actionBtn.disabled = true;
+      setStatus("Đang cập nhật…");
+      try {
+        const r = await fetch("/admin/vip-seats/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ add, release }),
+        });
+        const data = await r.json().catch(() => null);
+        if (!r.ok || !data || !data.ok) {
+          setStatus("Có lỗi khi cập nhật, vui lòng thử lại.", true);
+          actionBtn.disabled = false;
+          return;
+        }
+        const bits = [];
+        if (data.added) bits.push(`${data.added} ghế chuyển sang vé mời`);
+        if (data.released) bits.push(`${data.released} ghế trả về bán`);
+        const errs = data.errors || [];
+        if (errs.length) bits.push(`${errs.length} ghế không đổi được: ${errs.join("; ")}`);
+        const msg = bits.join(" · ") || "Không có thay đổi nào.";
+        if (data.added || data.released) {
+          // Something changed, so the map is stale — carry the summary over the reload.
+          sessionStorage.setItem(CARRY, JSON.stringify({ msg, isErr: errs.length > 0 }));
+          window.location.reload();
+          return;
+        }
+        setStatus(msg, true);
+        actionBtn.disabled = false;
+      } catch (_) {
+        setStatus("Không kết nối được máy chủ.", true);
+        actionBtn.disabled = false;
+      }
+    }
+
     // Export: generate + store a PDF per selected seat, then go to the depot page.
-    exportBtn?.addEventListener("click", async () => {
+    actionBtn?.addEventListener("click", async () => {
       if (!selected.size) return;
+      if (POOL) { applyPool(); return; }
       // Names are optional (for the organisers' records only — never on the ticket).
       const tickets = [...selected.values()].map((e) => ({
         seat_id: e.seat.id, name: (e.name || "").trim(),
       }));
-      exportBtn.disabled = true;
+      actionBtn.disabled = true;
       setStatus("Đang tạo vé…");
       try {
         const r = await fetch("/admin/invitations/export", {
@@ -238,10 +326,10 @@
             : "Có lỗi khi tạo vé, vui lòng thử lại.",
           true,
         );
-        exportBtn.disabled = false;
+        actionBtn.disabled = false;
       } catch (_) {
         setStatus("Không kết nối được máy chủ.", true);
-        exportBtn.disabled = false;
+        actionBtn.disabled = false;
       }
     });
 
@@ -260,21 +348,43 @@
     );
     items.forEach((entry) => {
       const li = document.createElement("li");
-      li.className = "vip-pick";
+      li.className = POOL ? "vip-pick pool-pick" : "vip-pick";
       const label = document.createElement("span");
       label.className = "vip-pick__seat";
       label.textContent = entry.seat.label;
-      const input = document.createElement("input");
-      input.type = "text";
-      input.className = "vip-pick__name";
-      input.placeholder = "Tên người nhận (không bắt buộc)";
-      input.value = entry.name || "";
-      input.addEventListener("input", () => { entry.name = input.value; });
       li.appendChild(label);
-      li.appendChild(input);
+      if (POOL) {
+        // No name field here — this page changes what a seat *is*, it doesn't
+        // issue anything. Spell out the direction instead.
+        const act = document.createElement("span");
+        act.className = "pool-pick__action pool-pick__action--" + entry.action;
+        act.textContent = entry.action === "add" ? "→ vé mời" : "→ mở bán";
+        li.appendChild(act);
+      } else {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "vip-pick__name";
+        input.placeholder = "Tên người nhận (không bắt buộc)";
+        input.value = entry.name || "";
+        input.addEventListener("input", () => { entry.name = input.value; });
+        li.appendChild(input);
+      }
       panel.appendChild(li);
     });
-    if (summary) summary.textContent = selected.size ? `${selected.size} ghế` : "Chưa chọn ghế nào.";
-    if (exportBtn) exportBtn.disabled = selected.size === 0;
+    if (summary) {
+      if (!selected.size) {
+        summary.textContent = "Chưa chọn ghế nào.";
+      } else if (POOL) {
+        const add = items.filter((e) => e.action === "add").length;
+        const rel = items.length - add;
+        summary.textContent = [
+          add ? `${add} ghế → vé mời` : "",
+          rel ? `${rel} ghế → mở bán` : "",
+        ].filter(Boolean).join(" · ");
+      } else {
+        summary.textContent = `${selected.size} ghế`;
+      }
+    }
+    if (actionBtn) actionBtn.disabled = selected.size === 0;
   }
 })();

@@ -1,16 +1,22 @@
-"""Reserve the VIP / invitation seats listed in scripts/data/vip_reserved_seats.csv.
+"""Seed the VIP / invitation pool from scripts/data/vip_reserved_seats.csv.
 
-Those seats are set to ``status='blocked'`` — removed from public sale (the seat map
-and the hold API both require 'available'), but still issuable as free invitations
-via the admin "Vé mời" page. Run it after importing the seat map.
+This is a **first-boot seed only**. The pool's source of truth is ``seats.is_vip``
+in the database, edited by managers at ``/admin/vip-seats``. Re-applying the CSV on
+every deploy would silently undo their changes, so ``run()`` does nothing once any
+seat is already marked VIP. Use ``--force`` to override that deliberately.
+
+A seeded seat gets ``is_vip=True`` and ``status='blocked'``: removed from public sale
+(the seat map and the hold API both require 'available'), but still issuable as a free
+invitation via the admin "Vé mời" page.
 
 The reserved list was extracted from the greyed-out cells of the masterplan's
 "Sơ đồ hạng vé" tab (145 seats). Regenerate it with --regen <file.xlsx> if that
 map changes (dev only; the workbook is not committed).
 
 Run inside the app container:
-    python -m scripts.import_vip_seats            # block the listed seats
-    python -m scripts.import_vip_seats --unblock  # release them back to sale
+    python -m scripts.import_vip_seats            # seed, if the pool is empty
+    python -m scripts.import_vip_seats --force    # seed even if the pool is set up
+    python -m scripts.import_vip_seats --unblock  # release the whole pool to sale
 """
 from __future__ import annotations
 
@@ -18,7 +24,7 @@ import csv
 import sys
 from pathlib import Path
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.db import SessionLocal
 from app.models import Seat
@@ -32,26 +38,6 @@ def _load_list() -> list[tuple[str, str, int]]:
             (r["section"], r["row_label"], int(r["seat_number"]))
             for r in csv.DictReader(fh)
         ]
-
-
-def reserved_seat_ids(db) -> set[int]:
-    """Seat ids of the VIP-reserved seats (from the CSV), whatever their status.
-
-    VIP membership is defined by the CSV, not by seat status — a reserved seat may
-    be 'blocked' (not yet issued) or 'booked' (its ticket exported), and both count.
-    """
-    from sqlalchemy import select
-
-    from app.models import Seat
-
-    want = _load_list()
-    if not want:
-        return set()
-    rows = db.execute(
-        select(Seat.id, Seat.section, Seat.row_label, Seat.seat_number)
-    ).all()
-    wanted = set(want)
-    return {sid for sid, sec, rl, num in rows if (sec, rl, num) in wanted}
 
 
 def _regen(xlsx: str) -> None:
@@ -82,12 +68,38 @@ def _regen(xlsx: str) -> None:
     print(f"Regenerated {CSV_PATH} with {len(rows)} reserved seats.")
 
 
-def run(unblock: bool = False) -> None:
-    reserved = _load_list()
-    from_status, to_status = ("blocked", "available") if unblock else ("available", "blocked")
-
+def run(unblock: bool = False, force: bool = False) -> None:
     db = SessionLocal()
     try:
+        if unblock:
+            # Escape hatch: hand the whole pool back to public sale. Exported
+            # invitations are 'booked' and are left alone — releasing those would
+            # put a seat with a live QR back on sale.
+            released = db.execute(
+                update(Seat)
+                .where(Seat.is_vip.is_(True), Seat.status == "blocked")
+                .values(status="available", is_vip=False,
+                        held_by_cart=None, hold_expires_at=None)
+                .returning(Seat.id)
+            ).scalars().all()
+            kept = db.execute(
+                select(func.count()).select_from(Seat).where(Seat.is_vip.is_(True))
+            ).scalar()
+            db.commit()
+            print(f"Released {len(released)} VIP seats back to sale.")
+            if kept:
+                print(f"  {kept} left VIP (already exported/booked, untouched).")
+            return
+
+        existing = db.execute(
+            select(func.count()).select_from(Seat).where(Seat.is_vip.is_(True))
+        ).scalar()
+        if existing and not force:
+            # The pool is managed in the admin UI now; re-seeding would revert it.
+            print(f"VIP pool already initialised ({existing} seats) -> skipping seed.")
+            return
+
+        reserved = _load_list()
         changed = booked = missing = 0
         for sec, rl, num in reserved:
             seat = db.execute(
@@ -103,17 +115,16 @@ def run(unblock: bool = False) -> None:
                 booked += 1  # never touch a sold seat
                 print(f"  ! already booked, skipped: {seat.label}")
                 continue
-            if seat.status == from_status:
+            if seat.status == "available":
                 db.execute(
                     update(Seat).where(Seat.id == seat.id).values(
-                        status=to_status, held_by_cart=None, hold_expires_at=None
+                        status="blocked", is_vip=True,
+                        held_by_cart=None, hold_expires_at=None,
                     )
                 )
                 changed += 1
         db.commit()
-        verb = "Released" if unblock else "Reserved"
-        print(f"{verb} {changed}/{len(reserved)} seats "
-              f"({from_status} -> {to_status}).")
+        print(f"Seeded {changed}/{len(reserved)} VIP seats (available -> blocked).")
         if booked:
             print(f"  {booked} already booked (left untouched).")
         if missing:
@@ -127,4 +138,4 @@ if __name__ == "__main__":
     if args and args[0] == "--regen":
         _regen(args[1])
     else:
-        run(unblock="--unblock" in args)
+        run(unblock="--unblock" in args, force="--force" in args)

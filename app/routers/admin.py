@@ -31,7 +31,6 @@ from app.services import pricing
 from app.services import refunds as refunds_svc
 from app.services import vip as vip_svc
 from app.templates import templates
-from scripts.import_vip_seats import reserved_seat_ids
 
 log = logging.getLogger("admin")
 
@@ -69,7 +68,14 @@ def dashboard(
     )
     booked = seat_counts.get("booked", 0)
     available_total = seat_counts.get("available", 0)
-    blocked_pool = seat_counts.get("blocked", 0)
+    # The invitation pool proper: seats flagged VIP and not yet issued. Counting
+    # every 'blocked' seat would also sweep in seats blocked for unrelated reasons
+    # (scripts/block_seats.py), which the "giữ cho vé mời" label would misreport.
+    blocked_pool = db.execute(
+        select(func.count()).select_from(Seat).where(
+            Seat.is_vip.is_(True), Seat.status == "blocked"
+        )
+    ).scalar() or 0
     held = db.execute(
         select(func.count()).select_from(Seat).where(
             Seat.status == "available",
@@ -433,10 +439,10 @@ def early_bird_save(
 
 
 # ---------------------------------------------------------------- invitations
-# The invitation page is just the seat map: only the VIP-reserved seats are
-# clickable, and clicking one exports its printable ticket. Which seats are VIP is
-# defined in exactly one place — scripts/data/vip_reserved_seats.csv, applied on
-# boot by scripts/import_vip_seats — so the admin never locks/unlocks seats here.
+# The invitation page is just the seat map: only VIP seats are clickable, and
+# clicking one exports its printable ticket. Which seats are VIP is held in
+# seats.is_vip and edited on the pool page below — this page never changes
+# membership, only issues tickets against it.
 @router.get("/invitations", response_class=HTMLResponse)
 def invitations(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -446,18 +452,87 @@ def invitations(request: Request) -> HTMLResponse:
 
 @router.get("/invitations/map")
 def invitations_map(db: Session = Depends(get_db)) -> dict:
-    """Seat-map JSON annotated for the admin: which seats are VIP, and each VIP
-    seat's export state — "none" (unexported), "exported", or "sent"."""
+    """Seat-map JSON annotated for the admin: which seats are VIP, each VIP seat's
+    export state — "none" (unexported), "exported", or "sent" — and which seats are
+    under a live shopper hold (so the pool page won't offer them for marking)."""
     data = build_seatmap(db)
-    vip_ids = reserved_seat_ids(db)
+    vip_ids = vip_svc.vip_seat_ids(db)
     states = vip_svc.states_by_seat(db)
+    held_ids = set(db.execute(
+        select(Seat.id).where(
+            Seat.status == "available",
+            Seat.held_by_cart.is_not(None),
+            Seat.hold_expires_at > func.now(),
+        )
+    ).scalars())
     for s in data["seats"]:
         is_vip = s["id"] in vip_ids
         state = states.get(s["id"], "none") if is_vip else "none"
         s["vip"] = is_vip
         s["vip_state"] = state
+        s["held"] = s["id"] in held_ids
         s["exported"] = state != "none"   # kept for any older consumers
     return data
+
+
+# ------------------------------------------------------------- VIP seat pool
+# Editing *which* seats are invitation seats, as opposed to issuing tickets for
+# them. Kept on its own page so a mis-click on the busy invitations map can't
+# quietly move a seat in or out of public sale.
+@router.get("/vip-seats", response_class=HTMLResponse)
+def vip_seats(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
+    counts = dict(
+        db.execute(
+            select(Seat.status, func.count())
+            .where(Seat.is_vip.is_(True))
+            .group_by(Seat.status)
+        ).all()
+    )
+    return templates.TemplateResponse(
+        request,
+        "admin_vip_seats.html",
+        {
+            "app_name": settings.app_name,
+            "vip_unexported": counts.get("blocked", 0),
+            "vip_issued": counts.get("booked", 0),
+            "vip_total": sum(counts.values()),
+        },
+    )
+
+
+class _PoolBody(BaseModel):
+    add: list[int] = []
+    release: list[int] = []
+
+
+@router.post("/vip-seats/apply")
+def vip_seats_apply(body: _PoolBody, db: Session = Depends(get_db)) -> dict:
+    """Move seats into and out of the invitation pool.
+
+    Each seat is applied independently so one refusal — a seat sold or held a moment
+    ago, an invitation already exported — doesn't discard the rest of the batch. The
+    refusals come back as human-readable strings for the map to show.
+    """
+    added, released, errors = 0, 0, []
+    for seat_id in dict.fromkeys(body.add):
+        try:
+            vip_svc.mark_vip(db, seat_id)
+            added += 1
+        except vip_svc.PoolChangeRefused as exc:
+            errors.append(str(exc))
+        except Exception:                       # noqa: BLE001 - one seat won't stop the batch
+            log.exception("Marking seat %s VIP failed", seat_id)
+            errors.append(f"{seat_id}: lỗi khi đánh dấu vé mời")
+    for seat_id in dict.fromkeys(body.release):
+        try:
+            vip_svc.release_vip(db, seat_id)
+            released += 1
+        except vip_svc.PoolChangeRefused as exc:
+            errors.append(str(exc))
+        except Exception:                       # noqa: BLE001
+            log.exception("Releasing seat %s from the VIP pool failed", seat_id)
+            errors.append(f"{seat_id}: lỗi khi trả ghế về bán")
+    return {"ok": True, "added": added, "released": released, "errors": errors}
 
 
 class _ExportItem(BaseModel):
@@ -477,7 +552,7 @@ def invitations_export(body: _ExportBody, db: Session = Depends(get_db)) -> dict
     is skipped rather than duplicated. Returns per-request counts so the map can
     report what happened.
     """
-    vip_ids = reserved_seat_ids(db)
+    vip_ids = vip_svc.vip_seat_ids(db)
     created, skipped, errors = 0, 0, []
     for item in body.tickets:
         if item.seat_id not in vip_ids:

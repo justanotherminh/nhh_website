@@ -507,6 +507,33 @@ body.tickets { background: linear-gradient(180deg, #e9f1fb 0%, #f4f6f4 62%); }
 .swatch--vip-done { background: #bfe3cc; border-color: #4f9d69; }
 .swatch--vip-sent { background: #bcd4f0; border-color: #3f74b8; }
 .swatch--nonvip { background: #d9dde2; }
+.swatch--sold { background: #b8bfc7; border-color: #9aa2ab; }
+/* On-sale seats keep their tier colour on the pool map, so the legend swatch is a
+   gradient across the three tiers rather than one flat fill. */
+.swatch--onsale {
+  background: linear-gradient(135deg, #7fd0c8 0 33%, #2f80c8 33% 66%, #1b3a6b 66%);
+  border-color: #215f96;
+}
+
+/* VIP pool editor: on-sale seats are the pick targets here, so they hover too. */
+.seatmap-viewport[data-mode="pool"] .seat-g:hover .seat { stroke-width: 2.5; }
+/* Adding and releasing pull in opposite directions — never the same colour. */
+.seat-g.pick-add .seat { fill: #e89b2e !important; stroke: #b9781a !important; }
+.seat-g.pick-release .seat { fill: #d4736b !important; stroke: #a94a42 !important; }
+.seat-g.pick-add .seat-num,
+.seat-g.pick-release .seat-num { fill: #1c2230 !important; }
+
+/* Seat and direction sit on one line here; the export list stacks because it has
+   a full-width name field under the seat, which this list doesn't. */
+.vip-picklist li.pool-pick {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem;
+}
+.pool-pick__action { font-size: .85rem; font-weight: 600; white-space: nowrap; }
+.pool-pick__action--add { color: #a8641a; }
+.pool-pick__action--release { color: #a94a42; }
 
 /* States override the tier palette (need !important to beat .seat-g.tier-r* ). */
 .seat-g.selected .seat { fill: #e89b2e !important; stroke: #b9781a !important; }

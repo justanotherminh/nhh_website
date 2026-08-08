@@ -10,6 +10,7 @@ import uuid
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -17,6 +18,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -64,6 +66,21 @@ class Seat(Base):
 
     # 'available' (sellable), 'blocked' (held back from public sale), 'booked' (paid).
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="available")
+
+    # Membership of the VIP / invitation pool, and the single source of truth for it.
+    #
+    # Deliberately separate from ``status``: a VIP seat is 'blocked' until its
+    # invitation is exported and 'booked' afterwards, and it stays VIP throughout.
+    # Conversely a seat can be 'blocked' for unrelated reasons (see
+    # scripts/block_seats.py) without ever being VIP.
+    #
+    # This used to be defined by scripts/data/vip_reserved_seats.csv, re-applied on
+    # every boot. That CSV is now only a first-boot seed: managers edit the pool from
+    # /admin/vip-seats, and re-applying a file on each deploy would silently revert
+    # their changes. See app/services/vip.py.
+    is_vip: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
 
     # Hold state: a seat is *held* when status='available' AND hold_expires_at > now().
     held_by_cart: Mapped[uuid.UUID | None] = mapped_column(PgUUID(as_uuid=True), nullable=True)

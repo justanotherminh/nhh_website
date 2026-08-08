@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Ghế vé mời — {{ app_name }}{% endblock %}
+{% block body_class %}tickets{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+<section class="tickets-head">
+  <div class="admin-head">
+    <h1>Danh sách ghế vé mời</h1>
+    <div class="admin-actions">
+      <a href="/admin/invitations" class="btn small-btn">Tạo vé mời →</a>
+      <a href="/admin" class="btn btn-secondary small-btn">← Bảng quản trị</a>
+    </div>
+  </div>
+
+  <p class="muted">Chọn ghế <strong>đang mở bán</strong> để chuyển thành ghế vé mời,
+    hoặc ghế vé mời <strong>chưa xuất vé</strong> để trả lại cho khách mua. Ghế đã
+    bán, đã xuất vé mời hoặc đang được khách giữ chỗ thì không đổi được. Cuộn để
+    phóng to/thu nhỏ, kéo để di chuyển.</p>
+
+  <p class="muted small">
+    Hiện có <strong>{{ vip_total }}</strong> ghế vé mời —
+    <strong>{{ vip_unexported }}</strong> chưa xuất vé,
+    <strong>{{ vip_issued }}</strong> đã phát.
+    Mỗi ghế trả về bán sẽ xuất hiện ngay trên sơ đồ mua vé.
+  </p>
+
+  <ul class="legend">
+    <li><span class="swatch swatch--vip"></span> Vé mời (chưa xuất) — bấm để trả về bán</li>
+    <li><span class="swatch swatch--vip-done"></span> Đã xuất vé mời</li>
+    <li><span class="swatch swatch--vip-sent"></span> Đã gửi cho khách</li>
+    <li><span class="swatch swatch--sold"></span> Đã bán / đang giữ</li>
+    <li><span class="swatch swatch--onsale"></span> Đang mở bán — bấm để thành vé mời</li>
+  </ul>
+</section>
+
+<div class="seatmap-layout">
+  <div class="seatmap-container">
+    {# data-mode switches admin_seatmap.js from issuing tickets to editing the pool. #}
+    <div id="seatmap" class="seatmap-viewport" data-mode="pool">
+      <p class="muted">Đang tải sơ đồ…</p>
+    </div>
+    <div class="zoom-controls" role="group" aria-label="Phóng to thu nhỏ">
+      <button type="button" id="zoom-in" title="Phóng to">+</button>
+      <button type="button" id="zoom-out" title="Thu nhỏ">−</button>
+      <button type="button" id="zoom-reset" title="Xem toàn cảnh">⟲</button>
+    </div>
+  </div>
+
+  <aside class="selection-box">
+    <h2>Thay đổi sắp áp dụng</h2>
+    <ul id="selection" class="selection-list vip-picklist"></ul>
+    <p id="selection-summary" class="selection-summary">Chưa chọn ghế nào.</p>
+    <button type="button" id="apply-btn" class="btn" disabled>Áp dụng thay đổi</button>
+    <p id="export-status" class="export-status small"></p>
+    <p class="muted small">Ghế chuyển thành vé mời sẽ bị gỡ khỏi trang mua vé ngay
+      lập tức. Ghế đã xuất vé mời phải thu hồi vé trước khi trả về bán — mã QR trên
+      vé đã in vẫn còn hiệu lực.</p>
+  </aside>
+</div>
+
+<script src="{{ static('js/admin_seatmap.js') }}" defer></script>
+{% endblock %}

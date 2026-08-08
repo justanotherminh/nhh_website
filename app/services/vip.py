@@ -23,7 +23,7 @@ from pathlib import Path
 import qrcode
 from fpdf import FPDF
 from PIL import Image, ImageDraw
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
@@ -58,6 +58,10 @@ _SEAT_PT = 15.0            # ≈ the label's cap height (3.64mm)
 
 class AlreadyExported(Exception):
     """This seat already has a VIP ticket; re-exporting is refused."""
+
+
+class PoolChangeRefused(Exception):
+    """A VIP-pool edit was rejected because the seat isn't in an eligible state."""
 
 
 def _depot() -> Path:
@@ -142,6 +146,107 @@ def render_ticket_pdf(seat: Seat, ticket: Ticket) -> bytes:
     pdf.image(io.BytesIO(qr), x=qr_x, y=qr_y, w=qr_w, h=qr_w)
 
     return bytes(pdf.output())
+
+
+# ------------------------------------------------------------- pool membership
+# Membership lives in ``seats.is_vip`` (see models.Seat), not in the CSV — managers
+# edit the pool from /admin/vip-seats and the CSV is only a first-boot seed.
+
+def vip_seat_ids(db: Session) -> set[int]:
+    """Seat ids currently in the VIP / invitation pool, whatever their status.
+
+    A VIP seat is 'blocked' before its invitation is exported and 'booked' after;
+    both are still VIP, so membership can't be inferred from status alone.
+    """
+    return set(db.execute(select(Seat.id).where(Seat.is_vip.is_(True))).scalars())
+
+
+def _refuse_mark(db: Session, seat_id: int) -> str:
+    """Why mark_vip refused — read back only once the UPDATE has already failed."""
+    seat = db.get(Seat, seat_id)
+    if seat is None:
+        return "Ghế không tồn tại."
+    if seat.is_vip:
+        return f"{seat.label} đã là ghế vé mời."
+    if seat.status == "booked":
+        return f"{seat.label} đã được bán — không thể chuyển thành vé mời."
+    if seat.status == "blocked":
+        return f"{seat.label} đang bị khóa vì lý do khác."
+    return f"{seat.label} đang được khách giữ — thử lại sau khi hết hạn giữ chỗ."
+
+
+def _refuse_release(db: Session, seat_id: int) -> str:
+    """Why release_vip refused — read back only once the UPDATE has already failed."""
+    seat = db.get(Seat, seat_id)
+    if seat is None:
+        return "Ghế không tồn tại."
+    if not seat.is_vip:
+        return f"{seat.label} không phải ghế vé mời."
+    if db.execute(
+        select(VipTicket.id).where(VipTicket.seat_id == seat_id)
+    ).first():
+        return f"{seat.label} đã xuất vé mời — thu hồi vé trước khi trả về bán."
+    if seat.status == "booked":
+        return f"{seat.label} đã được phát — không thể trả về bán."
+    return f"{seat.label} không ở trạng thái có thể trả về bán."
+
+
+def mark_vip(db: Session, seat_id: int) -> Seat:
+    """Move one unsold, unheld seat into the invitation pool.
+
+    Refuses a seat that is sold, blocked for some other reason, already VIP, or
+    currently held by a shopper mid-checkout — taking a seat out from under someone
+    at the payment step would be worse than making the manager wait for the hold to
+    lapse. The guard is part of the UPDATE, so a hold or sale landing concurrently
+    loses the race rather than being overwritten.
+    """
+    changed = db.execute(
+        update(Seat)
+        .where(
+            Seat.id == seat_id,
+            Seat.is_vip.is_(False),
+            Seat.status == "available",
+            or_(Seat.hold_expires_at.is_(None), Seat.hold_expires_at <= func.now()),
+        )
+        .values(status="blocked", is_vip=True, held_by_cart=None, hold_expires_at=None)
+        .returning(Seat.id)
+    ).first()
+    if changed is None:
+        db.rollback()
+        raise PoolChangeRefused(_refuse_mark(db, seat_id))
+    db.commit()
+    log.info("Seat %s marked VIP", seat_id)
+    return db.get(Seat, seat_id)
+
+
+def release_vip(db: Session, seat_id: int) -> Seat:
+    """Return one un-exported VIP seat to the public sale pool.
+
+    Refuses once an invitation PDF exists for the seat: that ticket carries a live
+    check-in QR which is possibly already printed and handed over, so the seat must
+    not be sellable again. ``status == 'blocked'`` implies that on its own (exporting
+    books the seat), but the ``VipTicket`` check states the real invariant rather
+    than relying on the proxy.
+    """
+    no_ticket = ~select(VipTicket.id).where(VipTicket.seat_id == Seat.id).exists()
+    changed = db.execute(
+        update(Seat)
+        .where(
+            Seat.id == seat_id,
+            Seat.is_vip.is_(True),
+            Seat.status == "blocked",
+            no_ticket,
+        )
+        .values(status="available", is_vip=False,
+                held_by_cart=None, hold_expires_at=None)
+        .returning(Seat.id)
+    ).first()
+    if changed is None:
+        db.rollback()
+        raise PoolChangeRefused(_refuse_release(db, seat_id))
+    db.commit()
+    log.info("Seat %s released from the VIP pool back to sale", seat_id)
+    return db.get(Seat, seat_id)
 
 
 # ---------------------------------------------------------------- operations
