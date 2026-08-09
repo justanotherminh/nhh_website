@@ -280,11 +280,13 @@ html { scroll-behavior: smooth; }
 
 /* Running order: numeral above the chapter name. */
 .chapters { list-style: none; margin: 0; padding: 0; }
-.chapters li {
+/* Direct children only — the repertoire list nested inside each chapter is also
+   made of <li>, and must not pick up the chapter rule or its padding. */
+.chapters > li {
   padding: .85rem 0;
   border-bottom: 1px solid rgba(24, 48, 86, .10);
 }
-.chapters li:first-child { border-top: 1px solid rgba(24, 48, 86, .10); }
+.chapters > li:first-child { border-top: 1px solid rgba(24, 48, 86, .10); }
 .chapters__num {
   display: block;
   font-size: .82rem;
@@ -300,6 +302,20 @@ html { scroll-behavior: smooth; }
   font-weight: 600;
   color: var(--ink);
 }
+
+/* Repertoire under each chapter. Composer and work share a line where there's
+   room and wrap to two when there isn't — same wrap-don't-squash approach as
+   .cast, since work titles are long and phones are the common case. */
+.works { list-style: none; margin: .55rem 0 0; padding: 0; }
+.works li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 .5rem;
+  padding: .22rem 0;
+}
+.work__composer { font-weight: 600; color: #46536a; font-size: .95rem; }
+.work__title { color: var(--muted); font-size: .95rem; }
 
 /* Cast: name + role. Rows wrap to two lines on narrow screens rather than
    squashing into columns, which is what a table would do here. */

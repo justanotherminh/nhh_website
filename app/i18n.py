@@ -173,6 +173,20 @@ STRINGS: dict[str, dict[str, str]] = {
     "chapter.3.name": {"vi": "GIỌT NƯỚC CHẠM TỚI CON NGƯỜI", "en": "THE DROP MEETS HUMANKIND"},
     "chapter.4.name": {"vi": "TÀN PHÁ", "en": "DESTRUCTION"},
     "chapter.5.name": {"vi": "TÁI SINH", "en": "REBIRTH"},
+    # Repertoire: composer names and work titles live in the template, not here.
+    # They're proper names and read identically in both languages — the organisers'
+    # own Vietnamese programme lists the works under their original titles, and
+    # translating them would be editorialising a concert programme. Only the
+    # descriptors below are genuinely language-dependent.
+    "program.folk_vn": {"vi": "Dân ca Việt Nam", "en": "Vietnamese folk song"},
+    "program.folk_hu": {
+        "vi": "Dân ca Hungary / Havasi",
+        "en": "Traditional Hungarian / Havasi",
+    },
+    "program.arr_quartet": {
+        "vi": "chuyển soạn cho tứ tấu dây",
+        "en": "arr. for string quartet",
+    },
 
     # ---- seat map page (tickets.html) ----
     "tickets.title": {"vi": "Chọn ghế", "en": "Choose your seats"},
