@@ -52,6 +52,31 @@
     </tbody>
   </table>
 
+  {# Traffic attribution. Hidden entirely until a tagged visit actually converts,
+     so the dashboard doesn't carry an empty table before any ads run. Gross of
+     refunds on purpose — a later refund isn't the campaign's doing. #}
+  {% if by_source | selectattr('tagged') | list %}
+  <h2>Nguồn khách mua vé <span class="muted small">(theo dữ liệu của chúng ta)</span></h2>
+  <p class="muted small">
+    Đây là số liệu từ cơ sở dữ liệu của chúng ta, không phải báo cáo của Meta.
+    Meta tính cả lượt “xem rồi mua” nên thường báo cao hơn — khi hai bên lệch nhau,
+    hãy tin bảng này để quyết định có tiếp tục chi tiền quảng cáo hay không.
+  </p>
+  <table class="admin-table">
+    <thead><tr><th>Nguồn</th><th>Chiến dịch</th><th>Số đơn</th><th>Doanh thu</th></tr></thead>
+    <tbody>
+      {% for r in by_source %}
+      <tr>
+        <td>{{ r.source }}</td>
+        <td class="small">{{ r.campaign }}</td>
+        <td>{{ r.orders }}</td>
+        <td>{{ "{:,.0f}".format(r.revenue).replace(",", ".") }} đ</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
   {# Suffix that carries the "show cancelled" state across page links. #}
   {% set c = '&cancelled=1' if show_cancelled else '' %}
   <div class="orders-head">

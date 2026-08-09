@@ -14,7 +14,7 @@ from app.db import SessionLocal, engine
 from app.routers import (
     admin, checkin, checkout, pages, seatmap, seats, ticket_view, webhook,
 )
-from app.services import announcements, orders
+from app.services import announcements, attribution, orders
 
 log = logging.getLogger("scheduler")
 
@@ -85,6 +85,23 @@ async def resolve_language(request, call_next):
     """
     request.state.lang = i18n.normalize(request.cookies.get("lang"))
     return await call_next(request)
+
+
+@app.middleware("http")
+async def capture_attribution(request, call_next):
+    """Persist ``utm_*`` / ``fbclid`` from a landing URL into a first-party cookie.
+
+    Middleware rather than a per-route dependency because an ad can land on any
+    page, and the parameters are gone as soon as the visitor navigates. Requests
+    without those parameters — which is nearly all of them, including every static
+    asset — fall straight through untouched.
+    """
+    response = await call_next(request)
+    try:
+        attribution.stamp_response(request, response)
+    except Exception:                # noqa: BLE001 - analytics must never 500 a page
+        log.exception("attribution capture failed")
+    return response
 
 
 app.mount(

@@ -53,4 +53,15 @@
     </form>
   </div>
 </section>
+{% if meta_pixel_id() %}
+{# Fires on reaching the form, not on submitting it — the value is the held seats,
+   which the buyer has already chosen by this point. #}
+<script>
+  fbq('track', 'InitiateCheckout', {
+    currency: 'VND',
+    value: {{ total|int }},
+    num_items: {{ seats|length }}
+  });
+</script>
+{% endif %}
 {% endblock %}

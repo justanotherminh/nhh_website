@@ -48,6 +48,7 @@ def create_order_from_holds(
     phone: str,
     extend_seconds: int,
     lang: str = "vi",
+    attribution: dict | None = None,
 ) -> Order:
     """Create a pending order for exactly the seats this cart currently holds.
 
@@ -84,6 +85,11 @@ def create_order_from_holds(
         discount_percent=percent,
         status="pending",
         items=items,
+        # Where this buyer came from, read off the first-party cookie by the caller
+        # (see services/attribution.py). Stamped at creation rather than at payment
+        # because the cookie belongs to the buyer's browser, and the payment is
+        # confirmed later by a webhook from payOS, which has no cookies of theirs.
+        **(attribution or {}),
     )
     db.add(order)
     db.commit()

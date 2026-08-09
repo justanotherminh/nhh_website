@@ -15,6 +15,7 @@ from app import i18n
 from app.config import settings
 from app.db import get_db
 from app.models import Seat
+from app.services import attribution
 from app.services import cart as cartmod
 from app.services import holds, orders, pricing
 from app.services import payos_client
@@ -89,6 +90,7 @@ def checkout_submit(
             phone=phone.strip(),
             extend_seconds=settings.payment_window_seconds,
             lang=getattr(request.state, "lang", i18n.DEFAULT_LANG),
+            attribution=attribution.for_order(request),
         )
     except orders.NoSeatsHeld:
         return RedirectResponse("/tickets", status_code=303)

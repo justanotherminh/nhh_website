@@ -44,6 +44,21 @@ class Settings(BaseSettings):
     # downloadable — it's streamed only through the authenticated admin route.
     vip_depot_dir: str = "app/vip_depot"
 
+    # Meta / Facebook ads. An empty pixel id disables the browser Pixel entirely
+    # (dev and tests fire nothing, and it doubles as a one-env-var kill switch);
+    # an empty CAPI token disables the server-side Purchase event independently.
+    meta_pixel_id: str = ""
+    meta_capi_token: str = ""
+    # Business Manager domain verification. Meta offers a DNS TXT record or this
+    # meta tag; the tag route avoids waiting on DNS propagation. Verifying the
+    # domain is what unlocks iOS conversion optimisation (Aggregated Event
+    # Measurement), so it gates ad performance even though it looks cosmetic.
+    meta_domain_verification: str = ""
+    # Set temporarily to make events show up in Events Manager -> Test Events.
+    # Leave empty in normal production, or the events are only test events.
+    meta_test_event_code: str = ""
+    meta_graph_version: str = "v21.0"
+
     # Seat holds (seconds)
     hold_ttl_seconds: int = 600  # 10 min while browsing
     payment_window_seconds: int = 900  # 15 min once a payOS link is created

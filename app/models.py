@@ -120,6 +120,23 @@ class Order(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # --- where this buyer came from (see app/services/attribution.py) ---
+    # Stamped from a first-party cookie set on the landing request. This is our own
+    # record, independent of what Meta reports about itself: Meta's dashboard counts
+    # view-through conversions and so flatters its own contribution, and these
+    # columns are what spending decisions should be based on.
+    #
+    # All nullable: most visitors arrive with no campaign parameters at all, and a
+    # NULL here means "direct or unknown", not "missing data".
+    source: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    utm_content: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Meta click/browser ids, forwarded to the Conversions API so it can match the
+    # purchase back to an ad click. fbc is derived from the fbclid Facebook appends
+    # to outbound links; fbp is the Pixel's own first-party browser cookie.
+    fbc: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fbp: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     items: Mapped[list[OrderItem]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )

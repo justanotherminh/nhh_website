@@ -5,6 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ static('css/styles.css') }}">
+  {% if meta_domain_verification() %}
+  {# Proves to Meta we own this domain — required before iOS conversion
+     optimisation works. Independent of the Pixel: this can (and should) be set
+     first, on its own. #}
+  <meta name="facebook-domain-verification" content="{{ meta_domain_verification() }}">
+  {% endif %}
+  {% if meta_pixel_id() %}
+  {# Meta Pixel. Renders only when META_PIXEL_ID is configured, so dev and tests
+     fire nothing and clearing the env var is a complete kill switch.
+
+     Automatic Advanced Matching is deliberately left OFF: it scrapes form fields
+     for email/phone and sends them hashed, which is a decision for whoever owns
+     the privacy call, not a side effect of adding a pixel. Conversion events are
+     fired explicitly by the pages that own them, not inferred from URLs. #}
+  <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
+    (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    fbq('set', 'autoConfig', false, {{ meta_pixel_id()|tojson }});
+    fbq('init', {{ meta_pixel_id()|tojson }});
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none" alt=""
+    src="https://www.facebook.com/tr?id={{ meta_pixel_id()|urlencode }}&ev=PageView&noscript=1"></noscript>
+  {% endif %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header">
