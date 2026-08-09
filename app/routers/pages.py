@@ -3,13 +3,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import i18n
 from app.config import settings
 from app.db import get_db
-from app.models import PriceTier, Seat
+from app.models import PriceTier
 from app.services import images as images_svc
 from app.templates import static_url, templates
 
@@ -76,41 +76,20 @@ def index(request: Request) -> HTMLResponse:
 
 @router.get("/tickets", response_class=HTMLResponse)
 def tickets(request: Request, db: Session = Depends(get_db)) -> HTMLResponse:
-    # Per-tier availability summary (real SVG seat map comes in a later step).
-    total_subq = (
-        select(Seat.tier_id, func.count().label("total"))
-        .group_by(Seat.tier_id)
-        .subquery()
-    )
-    avail_subq = (
-        select(Seat.tier_id, func.count().label("available"))
-        .where(Seat.status == "available")
-        .group_by(Seat.tier_id)
-        .subquery()
-    )
+    # Just the price legend. Per-tier availability counts used to be shown here and
+    # were deliberately dropped: the seat map already tells a buyer exactly which
+    # seats are free, seat by seat, without also publishing how much of the hall is
+    # still empty.
     rows = db.execute(
-        select(
-            PriceTier,
-            func.coalesce(total_subq.c.total, 0),
-            func.coalesce(avail_subq.c.available, 0),
-        )
-        .outerjoin(total_subq, total_subq.c.tier_id == PriceTier.id)
-        .outerjoin(avail_subq, avail_subq.c.tier_id == PriceTier.id)
-        .order_by(PriceTier.price_vnd.desc())
-    ).all()
+        select(PriceTier).order_by(PriceTier.price_vnd.desc())
+    ).scalars().all()
 
     # rows come priciest-first; rank 0 = cheapest (lightest) .. n-1 = priciest (darkest),
     # so the front-end palette can colour by rank without any stored hex.
     n = len(rows)
     tiers = [
-        {
-            "name": t.name,
-            "rank": n - 1 - i,
-            "price_vnd": t.price_vnd,
-            "total": total,
-            "available": available,
-        }
-        for i, (t, total, available) in enumerate(rows)
+        {"name": t.name, "rank": n - 1 - i, "price_vnd": t.price_vnd}
+        for i, t in enumerate(rows)
     ]
     return templates.TemplateResponse(
         request, "tickets.html", {"app_name": settings.app_name, "tiers": tiers}

@@ -196,7 +196,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "Tap an available seat to select it. The stage is at the bottom of the "
               "map. Scroll to zoom, drag to pan.",
     },
-    "tickets.free": {"vi": "trống", "en": "available"},
     "tickets.booked": {"vi": "Đã đặt", "en": "Booked"},
     "tickets.selected": {"vi": "Ghế đã chọn", "en": "Selected seats"},
     "tickets.none_selected": {"vi": "Chưa chọn ghế nào.", "en": "No seats selected yet."},

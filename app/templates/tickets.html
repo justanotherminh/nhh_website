@@ -9,8 +9,7 @@
   <ul class="legend">
     {% for tier in tiers %}
     <li><span class="swatch swatch--r{{ tier.rank }}"></span>
-      {{ tier.name }} — {{ "{:,.0f}".format(tier.price_vnd).replace(",", ".") }} đ
-      <em>({{ tier.available }}/{{ tier.total }} {{ t('tickets.free') }})</em></li>
+      {{ tier.name }} — {{ "{:,.0f}".format(tier.price_vnd).replace(",", ".") }} đ</li>
     {% endfor %}
     <li><span class="swatch swatch-booked"></span> {{ t('tickets.booked') }}</li>
   </ul>
