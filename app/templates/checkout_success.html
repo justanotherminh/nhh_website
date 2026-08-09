@@ -16,6 +16,21 @@
   <p><a class="btn" href="/">{{ t('common.back_home') }}</a></p>
 </section>
 
+{% if meta_pixel_id() and order.status == "paid" %}
+{# Browser-side Purchase. The payOS webhook reports the same purchase server-side
+   (services/meta_capi.py) because this page often never loads: the buyer pays on
+   their phone and closes the tab instead of following the redirect back, and the
+   money still arrives. eventID must match what CAPI sends — the order code — or
+   Meta counts the same sale twice.
+
+   VND is zero-decimal: send 700000, never 7000.00. #}
+<script>
+  fbq('track', 'Purchase',
+      {currency: 'VND', value: {{ order.amount_vnd|int }}, num_items: {{ order.items|length }}},
+      {eventID: {{ order.order_code|string|tojson }}});
+</script>
+{% endif %}
+
 {% if order.status != "paid" %}
 <script>
   // Poll the order status until it flips to paid (the webhook is the source of

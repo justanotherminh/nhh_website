@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
 from app import i18n
+from app.config import settings
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent))
 
@@ -57,8 +58,25 @@ def _seat_label(ctx, seat) -> str:
     return i18n.seat_label(seat, _req_lang(ctx))
 
 
+def _meta_pixel_id() -> str:
+    """The Meta Pixel id, or "" when tracking is off.
+
+    Read live rather than captured at import so tests can toggle it, and exposed
+    as this one value rather than the whole settings object — templates have no
+    business being able to reach payOS keys or the admin password.
+    """
+    return settings.meta_pixel_id
+
+
+def _meta_domain_verification() -> str:
+    """Meta's domain-verification token, or "" when not being verified that way."""
+    return settings.meta_domain_verification
+
+
 # Request-bound so templates need no per-call wiring — they read the language off
 # request.state, which the middleware populates from the `lang` cookie.
 templates.env.globals["t"] = _t
 templates.env.globals["current_lang"] = _current_lang
 templates.env.globals["seat_label"] = _seat_label
+templates.env.globals["meta_pixel_id"] = _meta_pixel_id
+templates.env.globals["meta_domain_verification"] = _meta_domain_verification

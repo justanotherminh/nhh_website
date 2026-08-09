@@ -11,8 +11,6 @@ import logging
 import secrets
 from zoneinfo import ZoneInfo
 
-_HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -25,6 +23,7 @@ from app.db import get_db
 from app.models import Announcement, Order, OrderItem, PriceTier, Seat, Ticket, VipTicket
 from app.routers.seatmap import build_seatmap
 from app.services import announcements as announce_svc
+from app.services import attribution as attrib_svc
 from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
@@ -33,6 +32,9 @@ from app.services import vip as vip_svc
 from app.templates import templates
 
 log = logging.getLogger("admin")
+
+# Timestamps are stored UTC and shown to managers in local time.
+_HANOI = ZoneInfo("Asia/Ho_Chi_Minh")
 
 _basic = HTTPBasic()
 
@@ -163,6 +165,7 @@ def dashboard(
             "blocked_pool": blocked_pool,
             "comps_issued": comps_issued,
             "order_stats": order_stats,
+            "by_source": attrib_svc.revenue_by_source(db),
             "tiers": tiers,
             "orders": orders,
             "page": page,

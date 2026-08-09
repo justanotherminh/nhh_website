@@ -50,4 +50,11 @@
   };
 </script>
 <script src="{{ static('js/seatmap.js') }}" defer></script>
+{% if meta_pixel_id() %}
+{# Reaching the seat map is the upper-funnel signal we optimise ad delivery on.
+   Purchases are far too rare here (a few hundred across the whole campaign) to
+   train Meta's algorithm — see ADS.md §1.4 — so the campaign optimises toward
+   this and InitiateCheckout, and Purchase is recorded for measurement only. #}
+<script>fbq('track', 'ViewContent', {content_type: 'product', content_category: 'seatmap'});</script>
+{% endif %}
 {% endblock %}
