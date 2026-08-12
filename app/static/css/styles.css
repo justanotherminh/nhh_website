@@ -333,6 +333,39 @@ html { scroll-behavior: smooth; }
   gap: 0 .6rem;
   margin: 0;
 }
+/* Biographies are collapsed by default so the section stays a scannable list of
+   names — 18 of them open at once is a very long scroll on a phone. */
+.artist summary.artist__head {
+  cursor: pointer;
+  position: relative;
+  padding-right: 1.6rem;   /* keeps the longest role clear of the chevron */
+  list-style: none;        /* Firefox's default marker */
+}
+.artist summary.artist__head::-webkit-details-marker { display: none; }
+.artist summary.artist__head::after {
+  content: "";
+  position: absolute;
+  right: .35rem;
+  top: .35em;
+  width: .42rem;
+  height: .42rem;
+  border-right: 2px solid #a6b1bf;
+  border-bottom: 2px solid #a6b1bf;
+  transform: rotate(45deg);
+  transition: transform .15s ease;
+}
+.artist details[open] > summary.artist__head::after {
+  transform: rotate(-135deg);
+  top: .55em;
+}
+.artist summary.artist__head:hover .artist__name { color: #1d3557; }
+.artist summary.artist__head:hover::after { border-color: #1d3557; }
+/* Keyboard users need to see where they are; mouse users don't need the ring. */
+.artist summary.artist__head:focus-visible {
+  outline: 2px solid #2f80c8;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 .artist__name { font-weight: 600; font-size: 1.06rem; color: var(--ink); }
 .artist__role {
   font-size: .78rem;

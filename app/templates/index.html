@@ -170,11 +170,23 @@
     <ul class="artists">
       {% for a in group.members %}
       <li class="artist">
+        {% if a.bio %}
+        {# <details> rather than a script: collapsing 18 biographies is the whole
+           point on a phone, and this needs no JS and stays keyboard-operable. #}
+        <details>
+          <summary class="artist__head">
+            <span class="artist__name">{{ a.name }}</span>
+            <span class="artist__role">{{ a.role }}</span>
+          </summary>
+          <p class="artist__bio">{{ a.bio }}</p>
+        </details>
+        {% else %}
+        {# No biography, so no disclosure arrow to open onto nothing. #}
         <p class="artist__head">
           <span class="artist__name">{{ a.name }}</span>
           <span class="artist__role">{{ a.role }}</span>
         </p>
-        {% if a.bio %}<p class="artist__bio">{{ a.bio }}</p>{% endif %}
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
