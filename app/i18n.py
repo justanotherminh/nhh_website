@@ -54,6 +54,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "sectionnav.aria": {"vi": "Nội dung trang", "en": "Page contents"},
     "nav.about": {"vi": "Về chương trình", "en": "About"},
     "nav.program": {"vi": "Chương trình", "en": "Programme"},
+    "nav.artists": {"vi": "Nghệ sĩ", "en": "Artists"},
     "nav.tickets": {"vi": "Đặt vé", "en": "Book tickets"},
 
     # ---- intro section (#gioi-thieu) ----
@@ -178,6 +179,9 @@ STRINGS: dict[str, dict[str, str]] = {
     # own Vietnamese programme lists the works under their original titles, and
     # translating them would be editorialising a concert programme. Only the
     # descriptors below are genuinely language-dependent.
+    # Line-up section. The artists themselves (names, roles, biographies) live in
+    # app/artists.py — content rather than interface copy.
+    "artists.title": {"vi": "Nghệ sĩ", "en": "Artists"},
     "program.folk_vn": {"vi": "Dân ca Việt Nam", "en": "Vietnamese folk song"},
     "program.folk_hu": {
         "vi": "Dân ca Hungary / Havasi",

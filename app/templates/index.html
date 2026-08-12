@@ -62,6 +62,7 @@
     <a href="#gioi-thieu">{{ t('nav.about') }}</a>
     <a href="#loi-ngo">{{ t('loingo.title') }}</a>
     <a href="#chuong-trinh">{{ t('nav.program') }}</a>
+    <a href="#nghe-si">{{ t('nav.artists') }}</a>
     <a href="/tickets" class="section-nav__cta">{{ t('nav.tickets') }}</a>
   </div>
 </nav>
@@ -154,32 +155,30 @@
       </li>
     </ol>
 
-    {# Cast hidden until the line-up is confirmed — restore when it's final.
-       Three entries below still have no role listed (Lương Khánh Nhi,
-       Trần Viết Bảo, Phạm Hồng Ánh), and the heading is a placeholder.
-    <h3 class="section__subtitle">Nghệ sĩ biểu diễn</h3>
-    <dl class="cast">
-      <div><dt>Hoàng Hồ Khánh Vân</dt><dd>Nghệ sĩ Violin</dd></div>
-      <div><dt>Lương Khánh Nhi</dt></div>
-      <div><dt>Hoàng Mạnh Lâm</dt><dd>Nghệ sĩ Oboe</dd></div>
-      <div><dt>Trần Viết Bảo</dt></div>
-      <div><dt>Hoàng Hồ Thu</dt><dd>Pianist</dd></div>
-      <div><dt>Sviatlana Halubouskaya</dt><dd>Nghệ sĩ Viola</dd></div>
-      <div><dt>Lưu Ly Ly</dt><dd>Nghệ sĩ Cello</dd></div>
-      <div><dt>Victoriia Filippova</dt><dd>Nghệ sĩ Violin</dd></div>
-      <div><dt>Tạ Khắc Huy</dt><dd>Pianist</dd></div>
-      <div><dt>Phạm Hồng Ánh</dt></div>
-      <div><dt>Đào Tiến Dũng</dt><dd>Baritone</dd></div>
-      <div><dt>Đặng Yến Nhi</dt><dd>Pianist</dd></div>
-      <div><dt>Nguyễn Hằng</dt><dd>Soprano</dd></div>
-      <div><dt>Trần Gia Bách</dt><dd>Tenor</dd></div>
-      <div><dt>Nguyễn Hải Yến</dt><dd>Chỉ huy Hợp xướng</dd></div>
-      <div><dt>Gió Xanh, NEU Philharmonic, Đoàn VNAM</dt><dd>Hợp xướng</dd></div>
-      <div><dt>Lê Bằng</dt><dd>Nhạc sĩ / arranger</dd></div>
-      <div><dt>Nguyễn Thế Vinh</dt><dd>Nhạc sĩ / arranger</dd></div>
-      <div><dt>Trần Tâm Trang</dt><dd>MC</dd></div>
-    </dl>
-    #}
+  </div>
+</section>
+
+{# Line-up. Content comes from app/artists.py, already resolved to the request's
+   language, so this stays a plain loop. Players the dossier lists by name only
+   render without a biography rather than with an invented one. #}
+<section class="section" id="nghe-si">
+  <div class="section__inner">
+    <h2 class="section__title">{{ t('artists.title') }}</h2>
+
+    {% for group in artist_groups %}
+    <h3 class="section__subtitle">{{ group.title }}</h3>
+    <ul class="artists">
+      {% for a in group.members %}
+      <li class="artist">
+        <p class="artist__head">
+          <span class="artist__name">{{ a.name }}</span>
+          <span class="artist__role">{{ a.role }}</span>
+        </p>
+        {% if a.bio %}<p class="artist__bio">{{ a.bio }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endfor %}
   </div>
 </section>
 {% endblock %}

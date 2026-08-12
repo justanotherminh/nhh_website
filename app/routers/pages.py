@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import i18n
+from app import artists, i18n
 from app.config import settings
 from app.db import get_db
 from app.models import PriceTier
@@ -67,10 +67,15 @@ def _moment_images() -> list[str]:
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request) -> HTMLResponse:
+    lang = getattr(request.state, "lang", i18n.DEFAULT_LANG)
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"app_name": settings.app_name, "moments": _moment_images()},
+        {
+            "app_name": settings.app_name,
+            "moments": _moment_images(),
+            "artist_groups": artists.for_lang(lang),
+        },
     )
 
 

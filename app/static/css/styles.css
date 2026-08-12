@@ -317,6 +317,38 @@ html { scroll-behavior: smooth; }
 .work__composer { font-weight: 600; color: #46536a; font-size: .95rem; }
 .work__title { color: var(--muted); font-size: .95rem; }
 
+/* Line-up: name + role on one line, biography beneath. Separated by hairlines
+   like .chapters rather than boxed into cards — there are 24 entries and cards
+   would turn the section into a wall. */
+.artists { list-style: none; margin: 0 0 2.2rem; padding: 0; }
+.artists .artist {
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(24, 48, 86, .10);
+}
+.artists .artist:first-child { border-top: 1px solid rgba(24, 48, 86, .10); }
+.artist__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 .6rem;
+  margin: 0;
+}
+.artist__name { font-weight: 600; font-size: 1.06rem; color: var(--ink); }
+.artist__role {
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #8b97a5;
+}
+/* Beats `.section p` on both size and spacing — this is supporting text under a
+   name, not body prose. */
+.artists .artist__bio {
+  margin: .35rem 0 0;
+  font-size: .97rem;
+  color: #55606f;
+}
+
 /* Cast: name + role. Rows wrap to two lines on narrow screens rather than
    squashing into columns, which is what a table would do here. */
 .cast { margin: 0; }
