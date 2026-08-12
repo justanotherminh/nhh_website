@@ -23,7 +23,6 @@ from app.db import get_db
 from app.models import Announcement, Order, OrderItem, PriceTier, Seat, Ticket, VipTicket
 from app.routers.seatmap import build_seatmap
 from app.services import announcements as announce_svc
-from app.services import attribution as attrib_svc
 from app.services import images as images_svc
 from app.services import orders as orders_svc
 from app.services import pricing
@@ -165,7 +164,6 @@ def dashboard(
             "blocked_pool": blocked_pool,
             "comps_issued": comps_issued,
             "order_stats": order_stats,
-            "by_source": attrib_svc.revenue_by_source(db),
             "tiers": tiers,
             "orders": orders,
             "page": page,

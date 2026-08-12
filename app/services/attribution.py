@@ -19,11 +19,6 @@ import base64
 import time
 from urllib.parse import parse_qsl, urlencode
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
-
-from app.models import Order
-
 COOKIE = "nhh_src"
 # Long enough to cover a considered purchase (people click an ad, think, come back
 # days later) without pretending to attribute a sale months after the fact.
@@ -141,33 +136,9 @@ def for_order(request) -> dict[str, str | None]:
     return {k: (v[: _LIMITS[k]] if v else None) for k, v in out.items()}
 
 
-# ------------------------------------------------------------------ reporting
-
-def revenue_by_source(db: Session) -> list[dict]:
-    """Paid sales grouped by where the buyer came from, richest first.
-
-    Gross of refunds deliberately: this answers "what did this campaign bring in",
-    and a later refund isn't the campaign's doing. The dashboard's own revenue card
-    remains the net figure.
-    """
-    rows = db.execute(
-        select(
-            Order.source,
-            Order.utm_campaign,
-            func.count(Order.id),
-            func.coalesce(func.sum(Order.amount_vnd), 0),
-        )
-        .where(Order.kind == "sale", Order.status.in_(("paid", "refunded")))
-        .group_by(Order.source, Order.utm_campaign)
-        .order_by(func.coalesce(func.sum(Order.amount_vnd), 0).desc())
-    ).all()
-    return [
-        {
-            "source": source or "Trực tiếp / không rõ",
-            "campaign": campaign or "—",
-            "orders": count,
-            "revenue": int(revenue or 0),
-            "tagged": source is not None,
-        }
-        for source, campaign, count, revenue in rows
-    ]
+# No reporting view here on purpose. A dashboard table was built and removed: the
+# counts are a floor rather than a figure (cross-device buyers, people who see a
+# post but type the URL, browsers that strip fbclid all land in "direct"), and a
+# number that reads as precise but isn't is worse than no number. The columns are
+# still populated — they're what the Conversions API matches on, and the raw data
+# is there in `orders` if anyone later wants to query it deliberately.
