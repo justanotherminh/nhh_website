@@ -183,6 +183,9 @@ STRINGS: dict[str, dict[str, str]] = {
     # app/artists.py — content rather than interface copy.
     "artists.title": {"vi": "Nghệ sĩ", "en": "Artists"},
     "program.folk_vn": {"vi": "Dân ca Việt Nam", "en": "Vietnamese folk song"},
+    # Currently unreferenced: the Havasi arrangement is commented out of the
+    # programme pending rights clearance. Kept so restoring that one line needs no
+    # other change — don't remove it as dead.
     "program.folk_hu": {
         "vi": "Dân ca Hungary / Havasi",
         "en": "Traditional Hungarian / Havasi",
