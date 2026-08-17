@@ -67,8 +67,26 @@ def dashboard(
     seat_counts = dict(
         db.execute(select(Seat.status, func.count()).group_by(Seat.status)).all()
     )
-    booked = seat_counts.get("booked", 0)
     available_total = seat_counts.get("available", 0)
+    # Seats actually sold. status='booked' on its own is *not* the sales figure:
+    # an issued invitation books its seat too (orders.create_comp_order), so the
+    # plain status count folds the comps into the sales card. Ask for the paid
+    # 'sale' order instead — invitations are reported separately as comps_issued.
+    # EXISTS rather than a join: a seat can carry order_items from earlier orders
+    # that expired before someone else bought it, and a join would count it twice.
+    sold = db.execute(
+        select(func.count()).select_from(Seat).where(
+            Seat.status == "booked",
+            select(OrderItem.id)
+            .join(Order, Order.id == OrderItem.order_id)
+            .where(
+                OrderItem.seat_id == Seat.id,
+                Order.kind == "sale",
+                Order.status == "paid",
+            )
+            .exists(),
+        )
+    ).scalar() or 0
     # The invitation pool proper: seats flagged VIP and not yet issued. Counting
     # every 'blocked' seat would also sweep in seats blocked for unrelated reasons
     # (scripts/block_seats.py), which the "giữ cho vé mời" label would misreport.
@@ -155,7 +173,7 @@ def dashboard(
         "admin.html",
         {
             "app_name": settings.app_name,
-            "booked": booked,
+            "sold": sold,
             "held": held,
             "free_now": free_now,
             "total_seats": sum(seat_counts.values()),

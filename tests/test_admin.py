@@ -1,6 +1,7 @@
 """Admin dashboard tests: auth gate, dashboard render, manual order cancel."""
 from __future__ import annotations
 
+import re
 import uuid
 
 import pytest
@@ -146,6 +147,53 @@ def test_early_bird_rejects_backwards_window(admin_creds):
         assert "error=" in r.headers["location"]
     finally:
         _clear_promo()
+
+
+# ------------------------------------------------------------- seat counters
+def _card(html: str, label: str) -> int:
+    """The number on the dashboard card carrying `label`."""
+    m = re.search(
+        r'class="card-num">([\d.,]+)</span><span class="card-label">' + re.escape(label),
+        html,
+    )
+    assert m, f"card {label!r} not found"
+    return int(m.group(1).replace(".", "").replace(",", ""))
+
+
+def test_issued_invitations_are_not_counted_as_sold(throwaway_seats, admin_creds):
+    """An invitation books its seat too, so 'Ghế đã bán' must not count it.
+
+    Asserted as deltas: the tests share one database, so the absolute numbers
+    depend on whatever else is in it.
+    """
+    comp_seat, sold_seat = throwaway_seats
+    c = TestClient(app)
+
+    before = c.get("/admin", auth=admin_creds).text
+    sold0, comps0 = _card(before, "Ghế đã bán"), _card(before, "Vé mời đã phát")
+
+    db = SessionLocal()
+    try:
+        orders.create_comp_order(
+            db, seat_ids=[comp_seat], guest_name="Khách mời", send_email=False,
+        )
+    finally:
+        db.close()
+
+    after_comp = c.get("/admin", auth=admin_creds).text
+    assert _card(after_comp, "Ghế đã bán") == sold0          # the point of the test
+    assert _card(after_comp, "Vé mời đã phát") == comps0 + 1
+
+    code = _pending_order([sold_seat])
+    db = SessionLocal()
+    try:
+        assert orders.mark_order_paid(db, code)
+    finally:
+        db.close()
+
+    after_sale = c.get("/admin", auth=admin_creds).text
+    assert _card(after_sale, "Ghế đã bán") == sold0 + 1
+    assert _card(after_sale, "Vé mời đã phát") == comps0 + 1
 
 
 # --------------------------------------------------------- orders pagination

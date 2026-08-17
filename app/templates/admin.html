@@ -19,7 +19,9 @@
   </div>
 
   <div class="admin-cards">
-    <div class="card"><span class="card-num">{{ booked }}</span><span class="card-label">Ghế đã bán</span></div>
+    {# Sold only — issued invitations have their own card below, and used to be
+       counted here as well because both book the seat. #}
+    <div class="card"><span class="card-num">{{ sold }}</span><span class="card-label">Ghế đã bán</span></div>
     <div class="card"><span class="card-num">{{ held }}</span><span class="card-label">Đang giữ</span></div>
     <div class="card"><span class="card-num">{{ free_now }}</span><span class="card-label">Còn trống</span></div>
     <div class="card"><span class="card-num">{{ comps_issued }}</span><span class="card-label">Vé mời đã phát</span></div>
