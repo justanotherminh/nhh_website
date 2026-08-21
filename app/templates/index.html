@@ -1,4 +1,10 @@
 {% extends "base.html" %}
+{# TEMPORARY (2026-08-18): both ticket CTAs below point at an external Google
+   Form instead of the built-in seat map, at the organisers' request. The
+   purchase flow itself is untouched and still live — /tickets, /checkout and
+   the payOS webhook all work, they're just not linked from here any more.
+   To put it back: set this to "/tickets" and delete this comment. #}
+{% set ticket_cta = "https://forms.gle/pj2Njag2z4Dof1X77" %}
 {% block body_class %}home{% endblock %}
 {% block main_class %}home-main{% endblock %}
 {% block content %}
@@ -29,7 +35,7 @@
           </p>
         </div>
       </div>
-      <a class="home-hero__cta" href="/tickets">{{ t('hero.cta') }}</a>
+      <a class="home-hero__cta" href="{{ ticket_cta }}">{{ t('hero.cta') }}</a>
     </div>
 
     {# Featured-moment carousel. Images auto-discovered from static/img/moments/;
@@ -63,7 +69,7 @@
     <a href="#loi-ngo">{{ t('loingo.title') }}</a>
     <a href="#chuong-trinh">{{ t('nav.program') }}</a>
     <a href="#nghe-si">{{ t('nav.artists') }}</a>
-    <a href="/tickets" class="section-nav__cta">{{ t('nav.tickets') }}</a>
+    <a href="{{ ticket_cta }}" class="section-nav__cta">{{ t('nav.tickets') }}</a>
   </div>
 </nav>
 
