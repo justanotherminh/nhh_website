@@ -220,18 +220,15 @@ left out — Caddy re-issues on the new host, and a certificate can't be moved t
 machine that hasn't yet passed the ACME challenge.
 
 **Keep the tarball off the server and encrypted.** It holds every production
-secret and the buyers' names, emails and phone numbers.
-
-```bash
-scp -i ~/.ssh/nhh_azure azureuser@<old-ip>:~/nhh_website/backups/nhh-*.tar.gz .    # 💻 pull it down
-```
+secret and the buyers' names, emails and phone numbers. It lands in
+`~/nhh_website/backups/` on the server; download it from there however you like.
 
 ### Restoring onto a new server
 
 Do §1, §2 and §3 as written (provision, DNS, install Docker), then:
 
 ```bash
-# 🖥️ on the NEW server — scp the tarball here first
+# 🖥️ on the NEW server — upload the tarball to ~ first
 git clone https://<YOUR_GITHUB_PAT>@github.com/justanotherminh/nhh_website.git && cd nhh_website
 tar xzf ~/nhh-<timestamp>.tar.gz          # -> ./nhh-<timestamp>/
 cp nhh-<timestamp>/env .env
