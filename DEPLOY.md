@@ -187,15 +187,95 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml restart app
 docker compose -f docker-compose.prod.yml down          # stop (keeps data volumes)
 
-# Back up the database
-docker compose -f docker-compose.prod.yml exec db \
-  pg_dump -U nhh nhh > backup-$(date +%F).sql
+# Back up everything (databases + uploads + invitation PDFs + .env) — see §10
+./scripts/backup.sh
 ```
 
 **Full teardown (stops Azure billing):**
 ```bash
 az group delete --name nhh-rg    # 💻 deletes the VM, disk, IP — everything
 ```
+
+## 10. Backup, and moving to another server 🖥️
+
+`./scripts/backup.sh` writes one tarball to `backups/`. It is the complete
+state of the deployment — there is nothing else on the server worth keeping.
+
+```bash
+./scripts/backup.sh          # -> backups/nhh-20260923-140455.tar.gz
+```
+
+Four things go in, and the restore fails without any one of them:
+
+| Inside the tarball | What it is | If it's missing |
+|---|---|---|
+| `databases.sql` | `pg_dumpall` — every database in the cluster, plus roles and their passwords | No orders, seats, tickets. Total loss. |
+| `uploads.tar` | The `uploads_data` volume: manager-uploaded images | The DB stores only filenames, so every image 404s |
+| `vip_depot.tar` | The `vip_tickets_data` volume: generated invitation PDFs | Issued invitations can't be re-downloaded |
+| `env` | The live `.env` | DB password, payOS keys, SMTP and admin credentials — none of it is in git |
+
+`pg_dumpall`, not `pg_dump`: the latter takes a single database *by name*, so it
+quietly covers only the one you remembered. Caddy's cert volume is deliberately
+left out — Caddy re-issues on the new host, and a certificate can't be moved to a
+machine that hasn't yet passed the ACME challenge.
+
+**Keep the tarball off the server and encrypted.** It holds every production
+secret and the buyers' names, emails and phone numbers.
+
+```bash
+scp -i ~/.ssh/nhh_azure azureuser@<old-ip>:~/nhh_website/backups/nhh-*.tar.gz .    # 💻 pull it down
+```
+
+### Restoring onto a new server
+
+Do §1, §2 and §3 as written (provision, DNS, install Docker), then:
+
+```bash
+# 🖥️ on the NEW server — scp the tarball here first
+git clone https://<YOUR_GITHUB_PAT>@github.com/justanotherminh/nhh_website.git && cd nhh_website
+tar xzf ~/nhh-<timestamp>.tar.gz          # -> ./nhh-<timestamp>/
+cp nhh-<timestamp>/env .env
+
+# Match the code to the data: the dump carries a specific migration state, and
+# `main` may have moved on since. This detaches HEAD — `git checkout main` once
+# you have verified the restore, if the two are the same commit anyway.
+git checkout "$(cat nhh-<timestamp>/commit.txt)"
+
+# Database FIRST, before the app boots and starts running migrations.
+docker compose -f docker-compose.prod.yml up -d db
+docker compose -f docker-compose.prod.yml exec -T db \
+  psql -U nhh -d postgres < nhh-<timestamp>/databases.sql
+
+# Then the rest, which restores the two file volumes into the app container.
+docker compose -f docker-compose.prod.yml up -d --build
+APP=$(docker compose -f docker-compose.prod.yml ps -q app)
+docker run --rm --volumes-from "$APP" -v "$PWD/nhh-<timestamp>:/in" alpine \
+  sh -c "tar xf /in/uploads.tar -C /app/app/static/uploads \
+      && tar xf /in/vip_depot.tar -C /app/app/vip_depot"
+docker compose -f docker-compose.prod.yml restart app
+```
+
+**Expect `role "nhh" already exists` and `database "nhh" already exists` while
+the SQL loads.** The Postgres image creates both from `.env` before the dump
+runs. They're harmless — the tables and rows land in the existing empty
+database. A restore that reports *no* errors at all is the surprising one.
+
+Then, in order:
+
+1. **Verify before cutting over.** `curl -H 'Host: www.nanghoanghon.org' http://<new-ip>/health`,
+   and check the admin dashboard's seat counts against the old server's. Do this
+   while DNS still points at the old machine.
+2. **Repoint DNS** (§2) at the new IP, grey cloud. Watch
+   `docker compose -f docker-compose.prod.yml logs -f caddy` for the new cert.
+3. **Re-register the payOS webhook** (§8) — it stores a URL, and if the hostname
+   or IP changed, payments will stop being confirmed even though checkout works.
+4. **Keep the old VM for a week** before `az group delete`. It costs a few
+   dollars and it's the only way back if something didn't come across.
+
+Step 3 is the one that gets skipped. The failure it causes is silent: buyers pay,
+payOS has no working URL to notify, and the order sits `pending` until it expires.
+
+---
 
 ---
 

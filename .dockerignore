@@ -11,3 +11,6 @@ node_modules/
 *.md
 scratchpad/
 app/static/uploads/
+# Production backup tarballs (scripts/backup.sh): every secret plus buyer PII.
+# Must never be COPY'd into the image.
+backups/
