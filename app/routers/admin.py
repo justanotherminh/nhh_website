@@ -121,6 +121,16 @@ def dashboard(
     revenue_paid = gross_paid - refunded_live
     refunded_total = refunds_svc.refunded_total(db)
 
+    # Payments that arrived after their seats were gone (orders.mark_order_paid).
+    # The buyer has paid and holds nothing, so each one is money owed back by hand
+    # — shown above everything else rather than left for someone to spot in the
+    # orders table.
+    needs_refund = db.execute(
+        select(Order.order_code, Order.buyer_name, Order.amount_vnd)
+        .where(Order.status == "needs_refund")
+        .order_by(Order.created_at)
+    ).all()
+
     # Invitations issued = seats booked via a comp order.
     comps_issued = db.execute(
         select(func.count())
@@ -181,6 +191,7 @@ def dashboard(
             "refunded_total": refunded_total,
             "blocked_pool": blocked_pool,
             "comps_issued": comps_issued,
+            "needs_refund": needs_refund,
             "order_stats": order_stats,
             "tiers": tiers,
             "orders": orders,

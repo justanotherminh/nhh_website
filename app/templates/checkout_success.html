@@ -5,6 +5,11 @@
   {% if order.status == "paid" %}
   <h1>{{ t('success.paid_h1') }}</h1>
   <p>{{ t('success.paid_thanks') }} <strong>{{ order.email }}</strong>.</p>
+  {% elif order.status == "needs_refund" %}
+  {# Paid, but the seats had gone by the time the payment landed (see
+     orders.mark_order_paid). The money is real, so say so plainly. #}
+  <h1>{{ t('success.refund_h1') }}</h1>
+  <p>{{ t('success.refund_p') }}</p>
   {% else %}
   <h1>{{ t('success.pending_h1') }}</h1>
   <p class="muted">{{ t('success.pending_p') }}</p>
@@ -31,7 +36,7 @@
 </script>
 {% endif %}
 
-{% if order.status != "paid" %}
+{% if order.status not in ("paid", "needs_refund") %}
 <script>
   // Poll the order status until it flips to paid (the webhook is the source of
   // truth, so we don't trust the redirect alone).
@@ -44,7 +49,7 @@
       const { status } = await r.json();
       const el = document.getElementById("pay-status");
       if (el) el.textContent = STATUS_LABEL + ": " + status;
-      if (status === "paid") { clearInterval(timer); location.reload(); }
+      if (status === "paid" || status === "needs_refund") { clearInterval(timer); location.reload(); }
     } catch (_) {}
   }, 3000);
 </script>

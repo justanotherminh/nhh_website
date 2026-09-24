@@ -847,6 +847,7 @@ body.checkin--refunded { background: #7b2453; }
 .status-paid { background: #d7f0dd; color: #1c6b34; }
 .status-pending { background: #fdf0d0; color: #8a6100; }
 .status-cancelled { background: #eee; color: #888; }
+.status-needs_refund { background: #fbdcdc; color: #a12; }
 .status-expired { background: #eee; color: #888; }
 .status-comp { background: #e3e0f5; color: #4b3f8a; }
 .status-refunded { background: #f3d9e6; color: #7b2453; }

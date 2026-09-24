@@ -277,6 +277,17 @@ STRINGS: dict[str, dict[str, str]] = {
               "update automatically once payment completes.",
     },
     "success.status": {"vi": "Trạng thái", "en": "Status"},
+    "success.refund_h1": {
+        "vi": "Đã nhận thanh toán — nhưng ghế không còn",
+        "en": "Payment received — but the seats are gone",
+    },
+    "success.refund_p": {
+        "vi": "Thanh toán của bạn đến sau khi đơn hàng hết hạn, và ghế đã được người "
+              "khác mua. Ban tổ chức sẽ liên hệ và hoàn lại toàn bộ số tiền cho bạn.",
+        "en": "Your payment arrived after the order had expired, and the seats had been "
+              "bought by someone else. The organisers will contact you and refund the "
+              "full amount.",
+    },
 
     # ---- checkout cancel (checkout_cancel.html) ----
     "cancel.title": {"vi": "Đã hủy đơn hàng", "en": "Order cancelled"},

@@ -20,6 +20,11 @@ from app.services import holds, pricing
 log = logging.getLogger("orders")
 
 
+# States a payOS payment can still be applied to. 'cancelled' is included on
+# purpose — a payment can land after its order was cancelled; see mark_order_paid.
+PAYABLE_STATUSES = ("pending", "cancelled", "expired")
+
+
 class NoSeatsHeld(Exception):
     """The cart has no live holds, so there's nothing to check out."""
 
@@ -65,6 +70,18 @@ def create_order_from_holds(
 
     holds.extend(db, cart_id, extend_seconds)
 
+    # A cart has at most one pending order. A buyer who goes Back from payOS and
+    # submits again gets a fresh order for the same held seats, and the earlier
+    # one is cancelled here (its link voided below) rather than left live beside
+    # it: two payable links for one set of seats is how a buyer pays twice. Holds
+    # aren't touched — they carry over to the new order.
+    superseded = db.execute(
+        update(Order)
+        .where(Order.cart_id == cart_id, Order.status == "pending")
+        .values(status="cancelled")
+        .returning(Order.order_code, Order.payos_payment_link_id)
+    ).all()
+
     # Apply the early-bird discount (if any) per seat, so the line items sum exactly
     # to amount_vnd — the payOS charge and its item breakdown always reconcile.
     percent = pricing.active_discount_percent(db)
@@ -94,6 +111,7 @@ def create_order_from_holds(
     db.add(order)
     db.commit()
     db.refresh(order)
+    _void_payment_links(superseded, "Đơn được thay bằng đơn mới")
     return order
 
 
@@ -212,25 +230,67 @@ def get_order(db: Session, order_code: int) -> Order | None:
 
 
 def mark_order_paid(db: Session, order_code: int) -> bool:
-    """Confirm payment: book the seats and mint tickets. Idempotent.
+    """Apply a confirmed payment: book the seats and mint tickets. Idempotent.
 
-    Returns True if the order is paid (now or already), False if no such order.
+    Returns True if the order is paid (now, or by an earlier delivery), False if
+    there is no such order or the payment couldn't be honoured.
+
+    payOS may deliver the same payment more than once, concurrently, and late.
+    Two things make that safe:
+
+    * The order row is locked (``FOR UPDATE``) before its status is read. Two
+      deliveries arriving together are serialised: the second waits, then sees
+      'paid' and does nothing. Without the lock both read 'pending' and each
+      mints a full set of tickets.
+    * Seats are *claimed* with a guarded UPDATE, never simply assigned. A payment
+      can arrive after its order was cancelled — voiding the payOS link is best
+      effort, and a transfer can complete in the seconds after the window closes
+      — and by then the seats may have been sold to someone else. Paid money
+      beats any unpaid hold, so a seat that is still available is taken; one
+      that is booked, or blocked back into the VIP pool, is not. If any seat
+      can't be had, none are: the order becomes 'needs_refund' with no tickets,
+      for a manager to pay back by hand (the dashboard lists these).
     """
-    order = get_order(db, order_code)
+    order = db.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.order_code == order_code)
+        .with_for_update(of=Order)
+        # The caller may already hold this order in the session (the webhook
+        # reads it first); make sure what we act on is what we just locked.
+        .execution_options(populate_existing=True)
+    ).scalar_one_or_none()
     if order is None:
         return False
-    if order.status == "paid":
-        return True  # already processed — webhook re-fire, do nothing
+
+    was = order.status
+    if was not in PAYABLE_STATUSES:
+        db.rollback()  # release the lock
+        # 'paid' / 'refunded': an earlier delivery already processed it.
+        # 'needs_refund': already found unfulfillable; retrying won't change that.
+        return was in ("paid", "refunded")
+
+    seat_ids = {it.seat_id for it in order.items}
+    savepoint = db.begin_nested()
+    claimed = set(db.execute(
+        update(Seat)
+        .where(Seat.id.in_(list(seat_ids)), Seat.status == "available")
+        .values(status="booked", held_by_cart=None, hold_expires_at=None)
+        .returning(Seat.id)
+    ).scalars().all())
+    if claimed != seat_ids:
+        savepoint.rollback()  # un-book whatever did match; the order lock stays
+        order.status = "needs_refund"
+        db.commit()
+        log.error(
+            "Order %s was paid while '%s', but seat(s) %s are no longer available. "
+            "Marked needs_refund: the buyer must be paid back by hand.",
+            order_code, was, sorted(seat_ids - claimed),
+        )
+        return False
+    savepoint.commit()
 
     order.status = "paid"
-    seat_ids = [it.seat_id for it in order.items]
-    # Payment succeeded, so the seats are now permanently booked regardless of
-    # hold state; clear any hold bookkeeping on them.
-    db.execute(
-        update(Seat)
-        .where(Seat.id.in_(seat_ids))
-        .values(status="booked", held_by_cart=None, hold_expires_at=None)
-    )
     # Mint one ticket per seat (QR image + email come in the e-ticket step).
     for it in order.items:
         db.add(
@@ -242,9 +302,12 @@ def mark_order_paid(db: Session, order_code: int) -> bool:
             )
         )
     db.commit()
+    if was != "pending":
+        log.warning("Order %s paid after it was '%s'; its seats were still free, "
+                    "so the payment was honoured", order_code, was)
 
     # Deliver e-tickets. Email failure must NOT undo the confirmed payment, so we
-    # log and move on — the buyer can still view tickets via the success page.
+    # log and move on.
     try:
         from app.services import tickets as ticket_svc
 
@@ -256,20 +319,64 @@ def mark_order_paid(db: Session, order_code: int) -> bool:
 
 
 def cancel_order(db: Session, order_code: int, reason: str = "") -> bool:
-    """Cancel a pending order and release its still-held seats. Idempotent-ish:
-    a paid order is never cancelled here."""
-    order = get_order(db, order_code)
-    if order is None or order.status == "paid":
+    """Cancel a *pending* order and release the seats its cart still holds.
+
+    Only 'pending' moves. Paid and refunded orders are never touched, and neither
+    is 'needs_refund' — a flag a manager has to act on, which anyone holding the
+    order's cancel link could otherwise erase. The release is scoped to the
+    order's own cart, so it can't wipe a hold another buyer has since taken on a
+    seat this order once had.
+    """
+    row = db.execute(
+        update(Order)
+        .where(Order.order_code == order_code, Order.status == "pending")
+        .values(status="cancelled")
+        .returning(Order.id, Order.cart_id)
+    ).first()
+    if row is None:
+        db.rollback()
         return False
-    order.status = "cancelled"
-    seat_ids = [it.seat_id for it in order.items]
-    db.execute(
-        update(Seat)
-        .where(Seat.id.in_(seat_ids), Seat.status == "available")
-        .values(held_by_cart=None, hold_expires_at=None)
-    )
+    _release_own_holds(db, row.id, row.cart_id)
     db.commit()
     return True
+
+
+def _release_own_holds(db: Session, order_id: int, cart_id) -> None:
+    """Clear the holds an order's cart still has on that order's seats.
+
+    Never a bare "clear holds on these seats": by the time an order is cancelled
+    or expires, its holds may have lapsed and the seat been picked up by another
+    buyer, whose hold this must leave alone.
+    """
+    db.execute(
+        update(Seat)
+        .where(
+            Seat.id.in_(select(OrderItem.seat_id).where(OrderItem.order_id == order_id)),
+            Seat.status == "available",
+            Seat.held_by_cart == cart_id,
+        )
+        .values(held_by_cart=None, hold_expires_at=None)
+    )
+
+
+def _void_payment_links(rows, reason: str) -> None:
+    """Best effort: cancel payOS links so they can no longer be paid.
+
+    ``rows`` are ``(order_code, payos_payment_link_id)`` pairs. A failure is
+    logged, not raised — mark_order_paid copes with a payment that gets through
+    anyway.
+    """
+    if not rows or not payos_client_configured():
+        return
+    from app.services import payos_client
+
+    for order_code, link_id in rows:
+        if not link_id:
+            continue
+        try:
+            payos_client.cancel_payment_link(order_code, reason)
+        except Exception:
+            log.warning("Could not void payOS link for order %s", order_code)
 
 
 def expire_stale_orders(db: Session, older_than_seconds: int | None = None) -> int:
@@ -290,34 +397,25 @@ def expire_stale_orders(db: Session, older_than_seconds: int | None = None) -> i
         update(Order)
         .where(Order.status == "pending", Order.created_at < cutoff)
         .values(status="cancelled")
-        .returning(Order.id, Order.order_code, Order.payos_payment_link_id)
+        .returning(Order.id, Order.cart_id, Order.order_code, Order.payos_payment_link_id)
     ).all()
     db.commit()
 
     if not claimed:
         return 0
 
-    # Free any seats these orders were still holding (never touch booked seats).
-    order_ids = [row.id for row in claimed]
-    seat_ids = select(OrderItem.seat_id).where(OrderItem.order_id.in_(order_ids))
-    db.execute(
-        update(Seat)
-        .where(Seat.status == "available", Seat.id.in_(seat_ids))
-        .values(held_by_cart=None, hold_expires_at=None)
-    )
+    # Free the seats these orders' carts were still holding (never booked seats,
+    # and never a hold some other cart has taken since).
+    for row in claimed:
+        _release_own_holds(db, row.id, row.cart_id)
     db.commit()
 
-    # Best effort: void the payOS link so a late payment can't book a freed seat.
-    if payos_client_configured():
-        from app.services import payos_client
-
-        for row in claimed:
-            if not row.payos_payment_link_id:
-                continue
-            try:
-                payos_client.cancel_payment_link(row.order_code, "Hết hạn thanh toán")
-            except Exception:
-                log.warning("Could not void payOS link for order %s", row.order_code)
+    # Best effort: void the payOS links, so the buyer can't pay at all rather than
+    # pay and need a refund (mark_order_paid handles it if they get through).
+    _void_payment_links(
+        [(row.order_code, row.payos_payment_link_id) for row in claimed],
+        "Hết hạn thanh toán",
+    )
 
     log.info("Expired %d stale pending order(s)", len(claimed))
     return len(claimed)

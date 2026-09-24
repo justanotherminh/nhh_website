@@ -70,7 +70,7 @@ async def payos_webhook(
         # re-deliver. Check before, so the log line and the Meta report both
         # describe the transition rather than every duplicate.
         existing = orders.get_order(db, order_code)
-        first_time = existing is not None and existing.status != "paid"
+        first_time = existing is not None and existing.status in orders.PAYABLE_STATUSES
         if orders.mark_order_paid(db, order_code) and first_time:
             log.info("Order %s marked paid via webhook", order_code)
             if meta_capi.enabled():

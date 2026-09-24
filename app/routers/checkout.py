@@ -138,8 +138,14 @@ def checkout_success(request: Request, order: int, db: Session = Depends(get_db)
 
 @router.get("/checkout/cancel", response_class=HTMLResponse)
 def checkout_cancel(request: Request, order: int, db: Session = Depends(get_db)) -> HTMLResponse:
-    orders.cancel_order(db, order, reason="Người mua hủy")
     o = orders.get_order(db, order)
+    # Only the buyer's own browser may cancel. payOS sends them back here with
+    # their cart cookie (SameSite=Lax rides along on this top-level navigation);
+    # anyone else requesting the URL — a GET with a timestamp-based order code —
+    # only gets the page, never the side effect.
+    if o is not None and o.cart_id is not None and o.cart_id == cartmod.read_cart_id(request):
+        orders.cancel_order(db, order, reason="Người mua hủy")
+        o = orders.get_order(db, order)
     return templates.TemplateResponse(
         request,
         "checkout_cancel.html",

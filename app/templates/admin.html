@@ -18,6 +18,19 @@
     </div>
   </div>
 
+  {% if needs_refund %}
+  <div class="flash flash-err">
+    <strong>{{ needs_refund|length }} đơn đã thanh toán nhưng không còn ghế — cần hoàn tiền thủ công.</strong>
+    Tiền đến sau khi đơn hết hạn và ghế đã bán cho người khác; khách không có vé.
+    <ul>
+      {% for o in needs_refund %}
+      <li><a href="/admin/orders/{{ o.order_code }}">{{ o.order_code }}</a> — {{ o.buyer_name }},
+        {{ "{:,.0f}".format(o.amount_vnd).replace(",", ".") }} đ</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
   <div class="admin-cards">
     {# Sold only — issued invitations have their own card below, and used to be
        counted here as well because both book the seat. #}
